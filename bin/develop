@@ -1,0 +1,3 @@
+#!/bin/sh
+
+fswatch --event Updated -or -l 5 ./src ./test | xargs -I{} forge test -vvv

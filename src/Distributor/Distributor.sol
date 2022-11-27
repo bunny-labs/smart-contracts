@@ -6,9 +6,9 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 contract Distributor is ERC721 {
-    /***********
-     * Structs *
-     ***********/
+    /*********
+     * Types *
+     *********/
 
     struct Member {
         address wallet;
@@ -22,15 +22,14 @@ contract Distributor is ERC721 {
         Member[] members;
     }
 
-    /**********
-     * Errors *
-     **********/
-
     error NoMembers();
     error NothingToDeposit();
+    error NothingToRegister();
     error TooLargeDeposit();
     error NotAMember();
     error NotYourToken();
+
+    event Deposit(uint256 amount);
 
     /*************
      * Constants *
@@ -38,6 +37,10 @@ contract Distributor is ERC721 {
 
     /// Contract code version
     uint256 public constant CODE_VERSION = 1;
+
+    /// Maximum amount of tokens that can be deposited in this contract.
+    /// @dev The limit exists so that maximum shares per member (uint16) * maximum deposit (uint240) would never overflow.
+    uint256 public constant MAXIMUM_DEPOSIT = type(uint240).max;
 
     /********************
      * Public variables *
@@ -77,21 +80,27 @@ contract Distributor is ERC721 {
      * @dev Treasury address must approve this contract before deposit() can be called. Callable by any member.
      * @param treasury Address the funds will be pulled from.
      */
-    function deposit(address treasury) external {
-        if (balanceOf(msg.sender) == 0) revert NotAMember();
-
+    function deposit(address treasury) external memberOnly {
         uint256 balance = asset.balanceOf(treasury);
 
         if (balance == 0) revert NothingToDeposit();
-        if (balance > type(uint240).max) revert TooLargeDeposit();
+        if (balance > MAXIMUM_DEPOSIT) revert TooLargeDeposit();
 
         asset.transferFrom(treasury, address(this), balance);
-        _registerDeposit();
+        _registerTokens();
+    }
+
+    /**
+     * Register all unaccounted tokens held by the contract.
+     * @dev This enables a workflow that doesn't require token approvals. Asset can be transferred to this contract and any member can call register() to prepare the tokens for claiming.
+     */
+    function register() external memberOnly {
+        _registerTokens();
     }
 
     /**
      * Claim all available tokens for the specified member
-     * @dev Callable by the owner of the membership token only.
+     * @dev Callable only by the owner of the membership token.
      * @param membershipTokenId The ID of the membership token used for claiming.
      */
     function claim(uint8 membershipTokenId) external {
@@ -109,6 +118,13 @@ contract Distributor is ERC721 {
         returns (string memory)
     {
         return "";
+    }
+
+    /**
+     * Get the amount of unregistered tokens of the underlying asset that are held by this contract.
+     */
+    function unregisteredTokens() public view returns (uint256) {
+        return asset.balanceOf(address(this)) + totalClaimed - totalDeposited;
     }
 
     /*************
@@ -155,14 +171,14 @@ contract Distributor is ERC721 {
     }
 
     /**
-     * @dev Register a new deposit of the underlying asset
+     * @dev Register any unaccounted tokens of the underlying asset
      */
-    function _registerDeposit() internal {
-        uint256 unregisteredTokens = asset.balanceOf(address(this)) +
-            totalClaimed -
-            totalDeposited;
+    function _registerTokens() internal {
+        uint256 tokenAmount = unregisteredTokens();
+        if (tokenAmount == 0) revert NothingToRegister();
 
-        totalDeposited += unregisteredTokens;
+        totalDeposited += tokenAmount;
+        emit Deposit(tokenAmount);
     }
 
     /**
@@ -181,5 +197,13 @@ contract Distributor is ERC721 {
         memberClaimed[membershipTokenId] += claimableTokens;
         totalClaimed += claimableTokens;
         asset.transfer(ownerOf(membershipTokenId), claimableTokens);
+    }
+
+    /**
+     * @dev Restrict function to be called by members only.
+     */
+    modifier memberOnly() {
+        if (balanceOf(msg.sender) == 0) revert NotAMember();
+        _;
     }
 }

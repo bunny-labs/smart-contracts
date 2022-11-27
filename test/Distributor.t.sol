@@ -53,7 +53,7 @@ contract DistributorInitializationTest is DistributorTest {
     function testCanInitializeERC721(string memory name, string memory symbol)
         public
     {
-        Distributor d = new Distributor(
+        Distributor distributor = new Distributor(
             Distributor.Configuration({
                 name: name,
                 symbol: symbol,
@@ -62,12 +62,12 @@ contract DistributorInitializationTest is DistributorTest {
             })
         );
 
-        assertEq(d.name(), name);
-        assertEq(d.symbol(), symbol);
+        assertEq(distributor.name(), name);
+        assertEq(distributor.symbol(), symbol);
     }
 
     function testCanInitializeTokenAddress(address testToken) public {
-        Distributor d = new Distributor(
+        Distributor distributor = new Distributor(
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
@@ -76,14 +76,25 @@ contract DistributorInitializationTest is DistributorTest {
             })
         );
 
-        assertEq(address(d.asset()), testToken);
+        assertEq(address(distributor.asset()), testToken);
+    }
+
+    function testCanInitializeWithMaximumMembers() public {
+        new Distributor(
+            Distributor.Configuration({
+                name: "VCooors",
+                symbol: "VCOOOR",
+                token: address(token),
+                members: setupMembers(type(uint8).max, 69)
+            })
+        );
     }
 
     function testCannotInitializeWithNoMembers() public {
         Distributor.Member[] memory members;
 
         vm.expectRevert(Distributor.NoMembers.selector);
-        Distributor d = new Distributor(
+        new Distributor(
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
@@ -179,23 +190,24 @@ contract DistributorInitializationTest is DistributorTest {
 
         for (uint8 i; i < memberCount; i++) {
             assertEq(d.ownerOf(i), members[i].wallet);
+            assertEq(d.balanceOf(d.ownerOf(i)), 1);
         }
     }
 }
 
 contract DistributorDepositTest is DistributorTest {
     address treasury;
-    address member;
+    address firstMember;
 
-    Distributor d;
+    Distributor distributor;
 
     function setUp() public override {
         DistributorTest.setUp();
 
         treasury = makeAddr("treasury");
-        member = makeAddr("0");
+        firstMember = makeAddr("0");
 
-        d = new Distributor(
+        distributor = new Distributor(
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
@@ -207,48 +219,112 @@ contract DistributorDepositTest is DistributorTest {
 
     function testCanDeposit(uint256 amount) public {
         vm.assume(amount > 0);
-        vm.assume(amount < type(uint224).max);
+        vm.assume(amount < type(uint240).max);
 
         token.mint(treasury, amount);
 
         vm.prank(treasury);
-        token.approve(address(d), type(uint256).max);
+        token.approve(address(distributor), type(uint256).max);
 
-        vm.prank(member);
-        d.deposit(treasury);
+        vm.prank(firstMember);
+        distributor.deposit(treasury);
 
         assertEq(token.balanceOf(treasury), 0);
-        assertEq(token.balanceOf(address(d)), amount);
-        assertEq(d.totalDeposited(), amount);
+        assertEq(token.balanceOf(address(distributor)), amount);
+        assertEq(distributor.totalDeposited(), amount);
     }
 
-    function testCannotDepositIfNotAMember() public {}
+    function testCanDepositByAnyMember(uint232 amount) public {
+        vm.assume(amount > 0);
+
+        vm.prank(treasury);
+        token.approve(address(distributor), type(uint256).max);
+
+        uint8 totalMembers = distributor.totalMembers();
+        for (uint8 i; i < totalMembers; i++) {
+            address member = makeAddr(Strings.toString(i));
+            token.mint(treasury, amount);
+            vm.prank(member);
+            distributor.deposit(treasury);
+        }
+    }
+
+    function testCanDepositMaxAmount() public {
+        uint256 amount = type(uint240).max;
+
+        token.mint(treasury, amount);
+
+        vm.prank(treasury);
+        token.approve(address(distributor), type(uint256).max);
+
+        vm.prank(firstMember);
+        distributor.deposit(treasury);
+
+        assertEq(token.balanceOf(treasury), 0);
+        assertEq(token.balanceOf(address(distributor)), amount);
+        assertEq(distributor.totalDeposited(), amount);
+    }
+
+    function testCannotDepositTooMuch() public {
+        uint256 amount = uint256(type(uint240).max) + 1;
+        token.mint(treasury, amount);
+
+        vm.prank(treasury);
+        token.approve(address(distributor), type(uint256).max);
+
+        vm.expectRevert(Distributor.TooLargeDeposit.selector);
+        vm.prank(firstMember);
+        distributor.deposit(treasury);
+    }
+
+    function testCannotDepositIfNotAMember() public {
+        address nonMember = makeAddr("NotAMember");
+
+        token.mint(treasury, 420);
+
+        vm.prank(treasury);
+        token.approve(address(distributor), type(uint256).max);
+
+        vm.expectRevert(Distributor.NotAMember.selector);
+        vm.prank(nonMember);
+        distributor.deposit(treasury);
+    }
 
     function testCannotDepositFromEmptyAddress() public {
         vm.expectRevert(Distributor.NothingToDeposit.selector);
-        vm.prank(member);
-        d.deposit(treasury);
+        vm.prank(firstMember);
+        distributor.deposit(treasury);
     }
 
     function testCannotDepositWithoutApproval() public {
         token.mint(treasury, 420);
 
         vm.expectRevert();
-        vm.prank(member);
-        d.deposit(treasury);
+        vm.prank(firstMember);
+        distributor.deposit(treasury);
     }
 
     function testCanRegisterDepositedTokens(uint256 amount) public {
         vm.assume(amount > 0);
-        vm.assume(amount < type(uint224).max);
+        vm.assume(amount < type(uint240).max);
 
         token.mint(treasury, amount);
 
         vm.prank(treasury);
-        token.approve(address(d), type(uint256).max);
+        token.approve(address(distributor), type(uint256).max);
 
-        vm.prank(member);
-        d.deposit(treasury);
+        vm.prank(firstMember);
+        distributor.deposit(treasury);
+    }
+
+    function testCanRegisterMaxDeposit() public {
+        token.mint(treasury, type(uint240).max);
+
+        vm.prank(treasury);
+        token.approve(address(distributor), type(uint256).max);
+
+        vm.prank(firstMember);
+        distributor.deposit(treasury);
     }
 }
 
@@ -256,7 +332,7 @@ contract DistributorClaimTest is DistributorTest {
     address treasury;
     address member;
 
-    Distributor d;
+    Distributor distributor;
 
     function setUp() public override {
         DistributorTest.setUp();
@@ -264,7 +340,7 @@ contract DistributorClaimTest is DistributorTest {
         treasury = makeAddr("treasury");
         member = makeAddr("0");
 
-        d = new Distributor(
+        distributor = new Distributor(
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
@@ -274,27 +350,57 @@ contract DistributorClaimTest is DistributorTest {
         );
 
         vm.prank(treasury);
-        token.approve(address(d), type(uint256).max);
+        token.approve(address(distributor), type(uint256).max);
     }
 
     function testCanClaimTokens(uint256 tokenAmount) public {
-        uint8 memberCount = d.totalMembers();
+        uint8 memberCount = distributor.totalMembers();
         vm.assume(tokenAmount >= memberCount);
-        vm.assume(tokenAmount < type(uint224).max);
+        vm.assume(tokenAmount < type(uint240).max);
 
         token.mint(treasury, tokenAmount);
         vm.prank(member);
-        d.deposit(treasury);
+        distributor.deposit(treasury);
 
         for (uint8 i; i < memberCount; i++) {
             address memberAddress = makeAddr(Strings.toString(i));
             vm.prank(memberAddress);
-            d.claim(i);
+            distributor.claim(i);
         }
 
         // Only dust is left
-        assertTrue(token.balanceOf(address(d)) < memberCount);
+        assertTrue(token.balanceOf(address(distributor)) < memberCount);
     }
 
-    function testCannotClaimIfNotAMember() public {}
+    function testCannotClaimIfNotAMember() public {
+        token.mint(treasury, 420);
+        vm.prank(member);
+        distributor.deposit(treasury);
+
+        address nonMember = makeAddr("NotAMember");
+        vm.expectRevert(Distributor.NotYourToken.selector);
+        vm.prank(nonMember);
+        distributor.claim(0);
+    }
+
+    function testCannotClaimIfNotYourToken(uint256 tokenAmount) public {
+        uint8 memberCount = distributor.totalMembers();
+        vm.assume(tokenAmount >= memberCount);
+        vm.assume(tokenAmount < type(uint240).max);
+
+        token.mint(treasury, tokenAmount);
+        vm.prank(member);
+        distributor.deposit(treasury);
+
+        for (uint8 i; i < memberCount; i++) {
+            address memberAddress = makeAddr(
+                Strings.toString((i + 1) % memberCount)
+            );
+            vm.expectRevert(Distributor.NotYourToken.selector);
+            vm.prank(memberAddress);
+            distributor.claim(i);
+        }
+    }
 }
+
+contract DistributorRealWorldTest is Test {}

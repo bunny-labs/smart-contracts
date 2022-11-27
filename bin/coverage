@@ -1,0 +1,4 @@
+#!/bin/bash
+forge coverage --report lcov
+lcov --remove lcov.info  -o lcov.info 'test/*' 'script/*'
+genhtml lcov.info -o report --branch-coverage

@@ -416,18 +416,29 @@ contract DistributorRegisterTest is DistributorTest {
     ) public {
         vm.assume(depositAmount > 0);
         vm.assume(transferAmount > 0);
+        uint256 totalAmount = uint256(depositAmount) + uint256(transferAmount);
 
+        // We start with an empty contract and transfer tokens in
+        token.mint(address(distributor), transferAmount);
+
+        // Should have that amount of unregistered tokens now
+        assertEq(distributor.unregisteredTokens(), transferAmount);
+
+        // Now we deposit another amount from the treasury
         token.mint(address(treasury), depositAmount);
         vm.prank(firstMember);
         distributor.deposit(treasury);
 
-        assertEq(distributor.totalDeposited(), depositAmount);
+        // Deposit should register both transferred tokens as well as previously unregistered ones
+        assertEq(distributor.totalDeposited(), totalAmount);
         assertEq(distributor.unregisteredTokens(), 0);
 
+        // Let's try another direct transfer
         token.mint(address(distributor), transferAmount);
 
+        // Should show up as unregistered on top of all the deposited tokens
         assertEq(distributor.unregisteredTokens(), transferAmount);
-        assertEq(distributor.totalDeposited(), depositAmount);
+        assertEq(distributor.totalDeposited(), totalAmount);
     }
 
     function testCanRegisterUnaccountedTokens(uint256 tokenAmount) public {
@@ -499,6 +510,24 @@ contract DistributorClaimTest is DistributorTest {
         uint8 memberCount = distributor.totalMembers();
         vm.assume(tokenAmount >= memberCount);
         vm.assume(tokenAmount < distributor.MAXIMUM_DEPOSIT());
+
+        token.mint(treasury, tokenAmount);
+        vm.prank(member);
+        distributor.deposit(treasury);
+
+        for (uint8 i; i < memberCount; i++) {
+            address memberAddress = makeAddr(Strings.toString(i));
+            vm.prank(memberAddress);
+            distributor.claim(i);
+        }
+
+        // Only dust is left
+        assertTrue(token.balanceOf(address(distributor)) < memberCount);
+    }
+
+    function testCanClaimFromMaxDeposit() public {
+        uint8 memberCount = distributor.totalMembers();
+        uint256 tokenAmount = distributor.MAXIMUM_DEPOSIT();
 
         token.mint(treasury, tokenAmount);
         vm.prank(member);

@@ -32,7 +32,7 @@ contract Distributor is ERC721 {
     event Deposit(uint256 amount);
 
     /*************
-     * Constants *
+     * Variables *
      *************/
 
     /// Contract code version
@@ -41,10 +41,6 @@ contract Distributor is ERC721 {
     /// Maximum amount of tokens that can be deposited in this contract.
     /// @dev The limit exists so that maximum shares per member (uint16) * maximum deposit (uint240) would never overflow.
     uint256 public constant MAXIMUM_DEPOSIT = type(uint240).max;
-
-    /********************
-     * Public variables *
-     ********************/
 
     /// The underlying ERC20 asset that is distributed to members
     IERC20 public asset;
@@ -99,12 +95,23 @@ contract Distributor is ERC721 {
     }
 
     /**
-     * Claim all available tokens for the specified member
+     * Claim all available tokens for the specified member.
      * @dev Callable only by the owner of the membership token.
      * @param membershipTokenId The ID of the membership token used for claiming.
      */
     function claim(uint8 membershipTokenId) external {
         _claim(membershipTokenId);
+    }
+
+    /**
+     * Claim all available tokens for multiple membership tokens.
+     * @dev Use this if you own multiple membership tokens.
+     * @param membershipTokenIds The IDs of the membership tokens used for claiming.
+     */
+    function claim(uint8[] calldata membershipTokenIds) external {
+        for (uint8 i; i < membershipTokenIds.length; i++) {
+            _claim(i);
+        }
     }
 
     /******************

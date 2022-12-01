@@ -14,7 +14,7 @@ contract DistributorTest is Test {
         token = new TestToken();
     }
 
-    function setupMembers(uint8 memberCount, uint16 sharesSeed)
+    function setupMembers(uint256 memberCount, uint16 sharesSeed)
         public
         returns (Distributor.Member[] memory)
     {
@@ -23,7 +23,7 @@ contract DistributorTest is Test {
         );
         uint16[] memory shares = Utils.expand16(sharesSeed, memberCount);
 
-        for (uint8 i; i < memberCount; i++) {
+        for (uint256 i; i < memberCount; i++) {
             members[i] = Distributor.Member(
                 makeAddr(Strings.toString(uint256(i))),
                 shares[i]
@@ -63,6 +63,7 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(42, 69)
             })
@@ -76,6 +77,7 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: name,
                 symbol: symbol,
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(42, 69)
             })
@@ -85,11 +87,26 @@ contract DistributorInitializationTest is DistributorTest {
         assertEq(distributor.symbol(), symbol);
     }
 
+    function testCanInitializeImageURI(string memory imageURI) public {
+        Distributor distributor = new Distributor(
+            Distributor.Configuration({
+                name: "VCooors",
+                symbol: "VCOOOR",
+                imageURI: imageURI,
+                token: address(token),
+                members: setupMembers(42, 69)
+            })
+        );
+
+        assertEq(distributor.imageURI(), imageURI);
+    }
+
     function testCanInitializeAssetAddress(address testToken) public {
         Distributor distributor = new Distributor(
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: testToken,
                 members: setupMembers(42, 69)
             })
@@ -103,6 +120,7 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMaximumMembers()
             })
@@ -117,6 +135,25 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
+                token: address(token),
+                members: members
+            })
+        );
+    }
+
+    function testCannotInitializeWithTooManyMembers() public {
+        Distributor.Member[] memory members = setupMembers(
+            uint256(type(uint8).max) + 1,
+            42
+        );
+
+        vm.expectRevert(Distributor.TooManyMembers.selector);
+        new Distributor(
+            Distributor.Configuration({
+                name: "VCooors",
+                symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: members
             })
@@ -137,6 +174,7 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: members
             })
@@ -163,6 +201,7 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: members
             })
@@ -180,6 +219,7 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(memberCount, 420)
             })
@@ -202,6 +242,7 @@ contract DistributorInitializationTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: members
             })
@@ -210,6 +251,31 @@ contract DistributorInitializationTest is DistributorTest {
         for (uint8 i; i < memberCount; i++) {
             assertEq(d.ownerOf(i), members[i].wallet);
             assertEq(d.balanceOf(d.ownerOf(i)), 1);
+        }
+    }
+}
+
+contract DistributorMetadataTest is DistributorTest {
+    function setUp() public override {
+        DistributorTest.setUp();
+    }
+
+    function testCanQueryMetadata() public {
+        uint8 memberCount = 3;
+        vm.assume(memberCount > 0);
+
+        Distributor distributor = new Distributor(
+            Distributor.Configuration({
+                name: "VCooors",
+                symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
+                token: address(token),
+                members: setupMembers(memberCount, 69)
+            })
+        );
+
+        for (uint8 i; i < memberCount; i++) {
+            distributor.tokenURI(i);
         }
     }
 }
@@ -230,6 +296,7 @@ contract DistributorDepositTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(42, 69)
             })
@@ -401,6 +468,7 @@ contract DistributorRegisterTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(42, 69)
             })
@@ -497,6 +565,7 @@ contract DistributorClaimTest is DistributorTest {
             Distributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
+                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(42, 69)
             })

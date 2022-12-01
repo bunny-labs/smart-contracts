@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import "forge-std/console.sol";
 import {ERC721} from "solmate/tokens/ERC721.sol";
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
+
+import {Base64} from "./Base64.sol";
 
 contract Distributor is ERC721 {
     /*********
@@ -18,11 +20,13 @@ contract Distributor is ERC721 {
     struct Configuration {
         string name;
         string symbol;
+        string imageURI;
         address token;
         Member[] members;
     }
 
     error NoMembers();
+    error TooManyMembers();
     error NothingToDeposit();
     error NothingToRegister();
     error TooLargeDeposit();
@@ -30,6 +34,7 @@ contract Distributor is ERC721 {
     error NotYourToken();
 
     event Deposit(uint256 amount);
+    event Claim(uint256 membershipTokenId, uint256 amount);
 
     /*************
      * Variables *
@@ -43,21 +48,24 @@ contract Distributor is ERC721 {
     uint256 public constant MAXIMUM_DEPOSIT = type(uint240).max;
 
     /// The underlying ERC20 asset that is distributed to members
-    IERC20 public asset;
+    IERC20Metadata public asset;
 
     /// The total number of members
     uint8 public totalMembers;
     /// The total number of shares across all members
     uint32 public totalShares;
     /// Mapping to track shares per member
-    mapping(uint8 => uint16) public memberShares;
+    mapping(uint256 => uint16) public memberShares;
 
     /// The total amount of underlying asset that has been deposited
     uint256 public totalDeposited;
     /// The total amount of underlying asset that has been claimed
     uint256 public totalClaimed;
     /// Mapping to track the amount of underlying asset claimed by each member
-    mapping(uint8 => uint256) public memberClaimed;
+    mapping(uint256 => uint256) public memberClaimed;
+
+    /// URI of the image asset to use in NFT metadata
+    string public imageURI;
 
     /******************
      * Initialization *
@@ -124,7 +132,38 @@ contract Distributor is ERC721 {
         override
         returns (string memory)
     {
-        return "";
+        string memory output;
+
+        string memory json = Base64.encode(
+            bytes(
+                string(
+                    abi.encodePacked(
+                        '{"name":"',
+                        name,
+                        " #",
+                        Strings.toString(membershipTokenId),
+                        '","image":"',
+                        imageURI,
+                        '","attributes":[{"trait_type":"Asset","value":"',
+                        asset.symbol(),
+                        '"},{"trait_type":"Shares","value":',
+                        Strings.toString(memberShares[membershipTokenId]),
+                        ',"max_value":',
+                        Strings.toString(totalShares),
+                        '},{"trait_type":"Claimable tokens","value":',
+                        Strings.toString(_claimableTokens(membershipTokenId)),
+                        ',"max_value":',
+                        Strings.toString(totalDeposited),
+                        "}]}"
+                    )
+                )
+            )
+        );
+
+        output = string(
+            abi.encodePacked("data:application/json;base64,", json)
+        );
+        return output;
     }
 
     /**
@@ -145,8 +184,9 @@ contract Distributor is ERC721 {
     function _initialize(Configuration memory config) internal {
         name = config.name;
         symbol = config.symbol;
+        imageURI = config.imageURI;
 
-        asset = IERC20(config.token);
+        asset = IERC20Metadata(config.token);
         _importMembers(config.members);
     }
 
@@ -155,8 +195,10 @@ contract Distributor is ERC721 {
      * @param newMembers List of new members to add.
      */
     function _importMembers(Member[] memory newMembers) internal {
-        uint8 newMemberCount = uint8(newMembers.length);
+        uint256 newMemberCount = newMembers.length;
+
         if (newMemberCount == 0) revert NoMembers();
+        if (newMemberCount > type(uint8).max) revert TooManyMembers();
 
         for (uint8 i; i < newMemberCount; i++) {
             _importMember(newMembers[i]);
@@ -168,7 +210,7 @@ contract Distributor is ERC721 {
      * @param newMember Member details for the new member
      */
     function _importMember(Member memory newMember) internal {
-        uint8 membershipTokenId = totalMembers;
+        uint256 membershipTokenId = totalMembers;
 
         totalMembers += 1;
         totalShares += newMember.shares;
@@ -189,21 +231,34 @@ contract Distributor is ERC721 {
     }
 
     /**
-     * @dev Claim all available tokens of the underlying asset that are available to the specified member.
-     * @param membershipTokenId ID of the membership token we're claiming for.
+     * @dev Calculate the number of tokens that is currently claimable for a member
      */
-    function _claim(uint8 membershipTokenId) internal {
-        if (msg.sender != ownerOf(membershipTokenId)) revert NotYourToken();
-
+    function _claimableTokens(uint256 membershipTokenId)
+        internal
+        view
+        returns (uint256)
+    {
         uint16 shares = memberShares[membershipTokenId];
         uint256 memberTokens = (totalDeposited * uint256(shares)) /
             uint256(totalShares);
         uint256 claimedTokens = memberClaimed[membershipTokenId];
-        uint256 claimableTokens = memberTokens - claimedTokens;
+        return memberTokens - claimedTokens;
+    }
+
+    /**
+     * @dev Claim all available tokens of the underlying asset that are available to the specified member.
+     * @param membershipTokenId ID of the membership token we're claiming for.
+     */
+    function _claim(uint256 membershipTokenId) internal {
+        if (msg.sender != ownerOf(membershipTokenId)) revert NotYourToken();
+
+        uint256 claimableTokens = _claimableTokens(membershipTokenId);
 
         memberClaimed[membershipTokenId] += claimableTokens;
         totalClaimed += claimableTokens;
         asset.transfer(ownerOf(membershipTokenId), claimableTokens);
+
+        emit Claim(membershipTokenId, claimableTokens);
     }
 
     /**

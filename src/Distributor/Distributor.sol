@@ -107,7 +107,7 @@ contract Distributor is ERC721 {
      * @dev Callable only by the owner of the membership token.
      * @param membershipTokenId The ID of the membership token used for claiming.
      */
-    function claim(uint8 membershipTokenId) external {
+    function claim(uint256 membershipTokenId) external {
         _claim(membershipTokenId);
     }
 
@@ -116,8 +116,8 @@ contract Distributor is ERC721 {
      * @dev Use this if you own multiple membership tokens.
      * @param membershipTokenIds The IDs of the membership tokens used for claiming.
      */
-    function claim(uint8[] calldata membershipTokenIds) external {
-        for (uint8 i; i < membershipTokenIds.length; i++) {
+    function claim(uint256[] calldata membershipTokenIds) external {
+        for (uint256 i; i < membershipTokenIds.length; i++) {
             _claim(i);
         }
     }
@@ -200,7 +200,7 @@ contract Distributor is ERC721 {
         if (newMemberCount == 0) revert NoMembers();
         if (newMemberCount > type(uint8).max) revert TooManyMembers();
 
-        for (uint8 i; i < newMemberCount; i++) {
+        for (uint256 i; i < newMemberCount; i++) {
             _importMember(newMembers[i]);
         }
     }

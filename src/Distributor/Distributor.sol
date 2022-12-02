@@ -120,7 +120,7 @@ contract Distributor is ERC721 {
      * @param membershipTokenIds The IDs of the membership tokens used for claiming.
      */
     function claim(uint256[] calldata membershipTokenIds) external {
-        for (uint256 i; i < membershipTokenIds.length; i++) {
+        for (uint256 i = 0; i < membershipTokenIds.length; i++) {
             _claim(i);
         }
     }
@@ -216,7 +216,7 @@ contract Distributor is ERC721 {
         if (newMemberCount == 0) revert NoMembers();
         if (newMemberCount > type(uint8).max) revert TooManyMembers();
 
-        for (uint256 i; i < newMemberCount; i++) {
+        for (uint256 i = 0; i < newMemberCount; i++) {
             _importMember(newMembers[i]);
         }
     }
@@ -257,11 +257,10 @@ contract Distributor is ERC721 {
 
         memberClaimed[membershipTokenId] += claimAmount;
         totalClaimed += claimAmount;
+        emit Claim(membershipTokenId, claimAmount);
 
         bool success = asset.transfer(ownerOf(membershipTokenId), claimAmount);
         if (!success) revert FailedTransfer();
-
-        emit Claim(membershipTokenId, claimAmount);
     }
 
     /**

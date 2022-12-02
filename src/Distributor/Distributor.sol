@@ -126,14 +126,15 @@ contract Distributor is ERC721 {
      * View functions *
      ******************/
 
+    /**
+     * Get metadata for the membership token
+     */
     function tokenURI(uint256 membershipTokenId)
         public
         view
         override
         returns (string memory)
     {
-        string memory output;
-
         string memory json = Base64.encode(
             bytes(
                 string(
@@ -151,7 +152,7 @@ contract Distributor is ERC721 {
                         ',"max_value":',
                         Strings.toString(totalShares),
                         '},{"trait_type":"Claimable tokens","value":',
-                        Strings.toString(_claimableTokens(membershipTokenId)),
+                        Strings.toString(claimableTokens(membershipTokenId)),
                         ',"max_value":',
                         Strings.toString(totalDeposited),
                         "}]}"
@@ -160,10 +161,7 @@ contract Distributor is ERC721 {
             )
         );
 
-        output = string(
-            abi.encodePacked("data:application/json;base64,", json)
-        );
-        return output;
+        return string(abi.encodePacked("data:application/json;base64,", json));
     }
 
     /**
@@ -171,6 +169,21 @@ contract Distributor is ERC721 {
      */
     function unregisteredTokens() public view returns (uint256) {
         return asset.balanceOf(address(this)) + totalClaimed - totalDeposited;
+    }
+
+    /**
+     * Get the number of tokens that are currently claimable for a member
+     */
+    function claimableTokens(uint256 membershipTokenId)
+        public
+        view
+        returns (uint256)
+    {
+        uint16 shares = memberShares[membershipTokenId];
+        uint256 memberTokens = (totalDeposited * uint256(shares)) /
+            uint256(totalShares);
+        uint256 claimedTokens = memberClaimed[membershipTokenId];
+        return memberTokens - claimedTokens;
     }
 
     /*************
@@ -231,34 +244,19 @@ contract Distributor is ERC721 {
     }
 
     /**
-     * @dev Calculate the number of tokens that is currently claimable for a member
-     */
-    function _claimableTokens(uint256 membershipTokenId)
-        internal
-        view
-        returns (uint256)
-    {
-        uint16 shares = memberShares[membershipTokenId];
-        uint256 memberTokens = (totalDeposited * uint256(shares)) /
-            uint256(totalShares);
-        uint256 claimedTokens = memberClaimed[membershipTokenId];
-        return memberTokens - claimedTokens;
-    }
-
-    /**
      * @dev Claim all available tokens of the underlying asset that are available to the specified member.
      * @param membershipTokenId ID of the membership token we're claiming for.
      */
     function _claim(uint256 membershipTokenId) internal {
         if (msg.sender != ownerOf(membershipTokenId)) revert NotYourToken();
 
-        uint256 claimableTokens = _claimableTokens(membershipTokenId);
+        uint256 claimAmount = claimableTokens(membershipTokenId);
 
-        memberClaimed[membershipTokenId] += claimableTokens;
-        totalClaimed += claimableTokens;
-        asset.transfer(ownerOf(membershipTokenId), claimableTokens);
+        memberClaimed[membershipTokenId] += claimAmount;
+        totalClaimed += claimAmount;
+        asset.transfer(ownerOf(membershipTokenId), claimAmount);
 
-        emit Claim(membershipTokenId, claimableTokens);
+        emit Claim(membershipTokenId, claimAmount);
     }
 
     /**

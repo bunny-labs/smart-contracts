@@ -32,6 +32,7 @@ contract Distributor is ERC721 {
     error TooLargeDeposit();
     error NotAMember();
     error NotYourToken();
+    error FailedTransfer();
 
     event Deposit(uint256 amount);
     event Claim(uint256 membershipTokenId, uint256 amount);
@@ -90,7 +91,9 @@ contract Distributor is ERC721 {
         if (balance == 0) revert NothingToDeposit();
         if (balance > MAXIMUM_DEPOSIT) revert TooLargeDeposit();
 
-        asset.transferFrom(treasury, address(this), balance);
+        bool success = asset.transferFrom(treasury, address(this), balance);
+        if (!success) revert FailedTransfer();
+
         _registerTokens();
     }
 
@@ -254,7 +257,9 @@ contract Distributor is ERC721 {
 
         memberClaimed[membershipTokenId] += claimAmount;
         totalClaimed += claimAmount;
-        asset.transfer(ownerOf(membershipTokenId), claimAmount);
+
+        bool success = asset.transfer(ownerOf(membershipTokenId), claimAmount);
+        if (!success) revert FailedTransfer();
 
         emit Claim(membershipTokenId, claimAmount);
     }

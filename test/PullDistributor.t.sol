@@ -4,27 +4,30 @@ pragma solidity ^0.8.16;
 import "forge-std/Test.sol";
 import "openzeppelin-contracts/utils/Strings.sol";
 
-import "../src/Distributor/Distributor.sol";
+import "../src/Distributor/PullDistributor.sol";
+import "../src/MembershipToken/MembershipToken.sol";
 import "./Utils.sol";
 
-contract DistributorTest is Test {
+contract PullDistributorTest is Test {
     TestToken token;
 
     function setUp() public virtual {
         token = new TestToken();
     }
 
-    function setupMembers(uint256 memberCount, uint16 sharesSeed)
+    function setupMembers(uint256 memberCount)
         public
-        returns (Distributor.Member[] memory)
+        returns (MembershipToken.Membership[] memory)
     {
-        Distributor.Member[] memory members = new Distributor.Member[](
+        MembershipToken.Membership[]
+            memory members = new MembershipToken.Membership[](memberCount);
+        uint16[] memory shares = Utils.expand16(
+            uint16(memberCount % type(uint16).max),
             memberCount
         );
-        uint16[] memory shares = Utils.expand16(sharesSeed, memberCount);
 
         for (uint256 i; i < memberCount; i++) {
-            members[i] = Distributor.Member(
+            members[i] = MembershipToken.Membership(
                 makeAddr(Strings.toString(uint256(i))),
                 shares[i]
             );
@@ -32,69 +35,33 @@ contract DistributorTest is Test {
 
         return members;
     }
-
-    function setupMaximumMembers()
-        public
-        returns (Distributor.Member[] memory)
-    {
-        uint8 memberCount = type(uint8).max;
-        Distributor.Member[] memory members = new Distributor.Member[](
-            memberCount
-        );
-
-        for (uint8 i; i < memberCount; i++) {
-            members[i] = Distributor.Member(
-                makeAddr(Strings.toString(uint256(i))),
-                type(uint16).max
-            );
-        }
-
-        return members;
-    }
 }
 
-contract DistributorInitializationTest is DistributorTest {
+contract PullDistributorInitializationTest is PullDistributorTest {
     function setUp() public override {
-        DistributorTest.setUp();
+        PullDistributorTest.setUp();
     }
 
     function testCanInitialize() public {
-        new Distributor(
-            Distributor.Configuration({
+        new PullDistributor(
+            PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
                 imageURI: "ipfs://hash",
                 token: address(token),
-                members: setupMembers(42, 69)
+                members: setupMembers(38)
             })
         );
-    }
-
-    function testCanInitializeERC721(string memory name, string memory symbol)
-        public
-    {
-        Distributor distributor = new Distributor(
-            Distributor.Configuration({
-                name: name,
-                symbol: symbol,
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: setupMembers(42, 69)
-            })
-        );
-
-        assertEq(distributor.name(), name);
-        assertEq(distributor.symbol(), symbol);
     }
 
     function testCanInitializeImageURI(string memory imageURI) public {
-        Distributor distributor = new Distributor(
-            Distributor.Configuration({
+        PullDistributor distributor = new PullDistributor(
+            PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
                 imageURI: imageURI,
                 token: address(token),
-                members: setupMembers(42, 69)
+                members: setupMembers(38)
             })
         );
 
@@ -102,203 +69,64 @@ contract DistributorInitializationTest is DistributorTest {
     }
 
     function testCanInitializeAssetAddress(address testToken) public {
-        Distributor distributor = new Distributor(
-            Distributor.Configuration({
+        PullDistributor distributor = new PullDistributor(
+            PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
                 imageURI: "ipfs://hash",
                 token: testToken,
-                members: setupMembers(42, 69)
+                members: setupMembers(38)
             })
         );
 
         assertEq(address(distributor.asset()), testToken);
     }
-
-    function testCanInitializeWithMaximumMembersAndShares() public {
-        new Distributor(
-            Distributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: setupMaximumMembers()
-            })
-        );
-    }
-
-    function testCannotInitializeWithNoMembers() public {
-        Distributor.Member[] memory members;
-
-        vm.expectRevert(Distributor.NoMembers.selector);
-        new Distributor(
-            Distributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: members
-            })
-        );
-    }
-
-    function testCannotInitializeWithTooManyMembers() public {
-        Distributor.Member[] memory members = setupMembers(
-            uint256(type(uint8).max) + 1,
-            42
-        );
-
-        vm.expectRevert(Distributor.TooManyMembers.selector);
-        new Distributor(
-            Distributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: members
-            })
-        );
-    }
-
-    function testCanInitializeTotalShares(uint8 memberCount, uint16 sharesSeed)
-        public
-    {
-        vm.assume(memberCount > 0);
-
-        Distributor.Member[] memory members = setupMembers(
-            memberCount,
-            sharesSeed
-        );
-
-        Distributor d = new Distributor(
-            Distributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: members
-            })
-        );
-
-        uint32 totalShares;
-        for (uint32 i; i < memberCount; i++) {
-            totalShares += members[i].shares;
-        }
-        assertEq(d.totalShares(), totalShares);
-    }
-
-    function testCanInitializeMemberShares(uint8 memberCount, uint16 sharesSeed)
-        public
-    {
-        vm.assume(memberCount > 0);
-
-        Distributor.Member[] memory members = setupMembers(
-            memberCount,
-            sharesSeed
-        );
-
-        Distributor d = new Distributor(
-            Distributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: members
-            })
-        );
-
-        for (uint8 i; i < memberCount; i++) {
-            assertEq(d.memberShares(i), members[i].shares);
-        }
-    }
-
-    function testCanInitializeMemberCount(uint8 memberCount) public {
-        vm.assume(memberCount > 0);
-
-        Distributor d = new Distributor(
-            Distributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: setupMembers(memberCount, 420)
-            })
-        );
-
-        assertEq(d.totalMembers(), memberCount);
-    }
-
-    function testCanMintMembershipTokens(uint8 memberCount, uint16 sharesSeed)
-        public
-    {
-        vm.assume(memberCount > 0);
-
-        Distributor.Member[] memory members = setupMembers(
-            memberCount,
-            sharesSeed
-        );
-
-        Distributor d = new Distributor(
-            Distributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: members
-            })
-        );
-
-        for (uint8 i; i < memberCount; i++) {
-            assertEq(d.ownerOf(i), members[i].wallet);
-            assertEq(d.balanceOf(d.ownerOf(i)), 1);
-        }
-    }
 }
 
-contract DistributorMetadataTest is DistributorTest {
+contract PullDistributorMetadataTest is PullDistributorTest {
     function setUp() public override {
-        DistributorTest.setUp();
+        PullDistributorTest.setUp();
     }
 
     function testCanQueryMetadata() public {
-        uint8 memberCount = 3;
+        uint16 memberCount = 3;
         vm.assume(memberCount > 0);
 
-        Distributor distributor = new Distributor(
-            Distributor.Configuration({
+        PullDistributor distributor = new PullDistributor(
+            PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
                 imageURI: "ipfs://hash",
                 token: address(token),
-                members: setupMembers(memberCount, 69)
+                members: setupMembers(memberCount)
             })
         );
 
-        for (uint8 i; i < memberCount; i++) {
+        for (uint16 i; i < memberCount; i++) {
             distributor.tokenURI(i);
         }
     }
 }
 
-contract DistributorDepositTest is DistributorTest {
+contract PullDistributorDepositTest is PullDistributorTest {
     address treasury;
     address firstMember;
 
-    Distributor distributor;
+    PullDistributor distributor;
 
     function setUp() public override {
-        DistributorTest.setUp();
+        PullDistributorTest.setUp();
 
         treasury = makeAddr("treasury");
         firstMember = makeAddr("0");
 
-        distributor = new Distributor(
-            Distributor.Configuration({
+        distributor = new PullDistributor(
+            PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
                 imageURI: "ipfs://hash",
                 token: address(token),
-                members: setupMembers(42, 69)
+                members: setupMembers(38)
             })
         );
 
@@ -323,8 +151,8 @@ contract DistributorDepositTest is DistributorTest {
     function testCanDepositByAnyMember(uint232 amount) public {
         vm.assume(amount > 0);
 
-        uint8 totalMembers = distributor.totalMembers();
-        for (uint8 i; i < totalMembers; i++) {
+        uint16 totalSupply = distributor.totalSupply();
+        for (uint16 i; i < totalSupply; i++) {
             address member = makeAddr(Strings.toString(i));
             token.mint(treasury, amount);
             vm.prank(member);
@@ -333,7 +161,7 @@ contract DistributorDepositTest is DistributorTest {
 
         assertEq(
             distributor.totalDeposited(),
-            uint256(amount) * uint256(totalMembers)
+            uint256(amount) * uint256(totalSupply)
         );
     }
 
@@ -354,7 +182,7 @@ contract DistributorDepositTest is DistributorTest {
         uint256 amount = uint256(distributor.MAXIMUM_DEPOSIT()) + 1;
         token.mint(treasury, amount);
 
-        vm.expectRevert(Distributor.TooLargeDeposit.selector);
+        vm.expectRevert(PullDistributor.TooLargeDeposit.selector);
         vm.prank(firstMember);
         distributor.deposit(treasury);
     }
@@ -364,13 +192,13 @@ contract DistributorDepositTest is DistributorTest {
 
         token.mint(treasury, 420);
 
-        vm.expectRevert(Distributor.NotAMember.selector);
+        vm.expectRevert(MembershipToken.NotAMember.selector);
         vm.prank(nonMember);
         distributor.deposit(treasury);
     }
 
     function testCannotDepositFromEmptyAddress() public {
-        vm.expectRevert(Distributor.NothingToDeposit.selector);
+        vm.expectRevert(PullDistributor.NothingToDeposit.selector);
         vm.prank(firstMember);
         distributor.deposit(treasury);
     }
@@ -450,27 +278,27 @@ contract DistributorDepositTest is DistributorTest {
     }
 }
 
-contract DistributorRegisterTest is DistributorTest {
+contract PullDistributorRegisterTest is PullDistributorTest {
     address firstMember;
     address nonMember;
     address treasury;
 
-    Distributor distributor;
+    PullDistributor distributor;
 
     function setUp() public override {
-        DistributorTest.setUp();
+        PullDistributorTest.setUp();
 
         firstMember = makeAddr("0");
         nonMember = makeAddr("nonMember");
         treasury = makeAddr("treasury");
 
-        distributor = new Distributor(
-            Distributor.Configuration({
+        distributor = new PullDistributor(
+            PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
                 imageURI: "ipfs://hash",
                 token: address(token),
-                members: setupMembers(42, 69)
+                members: setupMembers(38)
             })
         );
 
@@ -527,7 +355,7 @@ contract DistributorRegisterTest is DistributorTest {
 
         token.mint(address(distributor), tokenAmount);
 
-        vm.expectRevert(Distributor.NotAMember.selector);
+        vm.expectRevert(MembershipToken.NotAMember.selector);
         vm.prank(nonMember);
         distributor.register();
     }
@@ -543,31 +371,31 @@ contract DistributorRegisterTest is DistributorTest {
     }
 
     function testCannotRegisterZeroTokens() public {
-        vm.expectRevert(Distributor.NothingToRegister.selector);
+        vm.expectRevert(PullDistributor.NothingToRegister.selector);
         vm.prank(firstMember);
         distributor.register();
     }
 }
 
-contract DistributorClaimTest is DistributorTest {
+contract PullDistributorClaimTest is PullDistributorTest {
     address treasury;
     address member;
 
-    Distributor distributor;
+    PullDistributor distributor;
 
     function setUp() public override {
-        DistributorTest.setUp();
+        PullDistributorTest.setUp();
 
         treasury = makeAddr("treasury");
         member = makeAddr("0");
 
-        distributor = new Distributor(
-            Distributor.Configuration({
+        distributor = new PullDistributor(
+            PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
                 imageURI: "ipfs://hash",
                 token: address(token),
-                members: setupMembers(42, 69)
+                members: setupMembers(38)
             })
         );
 
@@ -576,7 +404,7 @@ contract DistributorClaimTest is DistributorTest {
     }
 
     function testCanClaimTokens(uint256 tokenAmount) public {
-        uint8 memberCount = distributor.totalMembers();
+        uint16 memberCount = distributor.totalSupply();
         vm.assume(tokenAmount >= memberCount);
         vm.assume(tokenAmount < distributor.MAXIMUM_DEPOSIT());
 
@@ -584,7 +412,7 @@ contract DistributorClaimTest is DistributorTest {
         vm.prank(member);
         distributor.deposit(treasury);
 
-        for (uint8 i; i < memberCount; i++) {
+        for (uint16 i; i < memberCount; i++) {
             address memberAddress = makeAddr(Strings.toString(i));
             vm.prank(memberAddress);
             distributor.claim(i);
@@ -595,21 +423,21 @@ contract DistributorClaimTest is DistributorTest {
     }
 
     function testCanClaimFromMaxDeposit() public {
-        uint8 memberCount = distributor.totalMembers();
+        uint16 memberCount = distributor.totalSupply();
         uint256 tokenAmount = distributor.MAXIMUM_DEPOSIT();
 
         token.mint(treasury, tokenAmount);
         vm.prank(member);
         distributor.deposit(treasury);
 
-        for (uint8 i; i < memberCount; i++) {
+        for (uint16 i; i < memberCount; i++) {
             address memberAddress = makeAddr(Strings.toString(i));
             vm.prank(memberAddress);
             distributor.claim(i);
         }
 
         // Only dust is left
-        assertTrue(token.balanceOf(address(distributor)) < memberCount);
+        assertLt(token.balanceOf(address(distributor)), memberCount);
     }
 
     function testCannotClaimIfNotAMember() public {
@@ -618,13 +446,13 @@ contract DistributorClaimTest is DistributorTest {
         distributor.deposit(treasury);
 
         address nonMember = makeAddr("NotAMember");
-        vm.expectRevert(Distributor.NotYourToken.selector);
+        vm.expectRevert(PullDistributor.NotYourToken.selector);
         vm.prank(nonMember);
         distributor.claim(0);
     }
 
     function testCannotClaimIfNotYourToken(uint256 tokenAmount) public {
-        uint8 memberCount = distributor.totalMembers();
+        uint16 memberCount = distributor.totalSupply();
         vm.assume(tokenAmount >= memberCount);
         vm.assume(tokenAmount < distributor.MAXIMUM_DEPOSIT());
 
@@ -632,15 +460,13 @@ contract DistributorClaimTest is DistributorTest {
         vm.prank(member);
         distributor.deposit(treasury);
 
-        for (uint8 i; i < memberCount; i++) {
+        for (uint16 i; i < memberCount; i++) {
             address memberAddress = makeAddr(
                 Strings.toString((i + 1) % memberCount)
             );
-            vm.expectRevert(Distributor.NotYourToken.selector);
+            vm.expectRevert(PullDistributor.NotYourToken.selector);
             vm.prank(memberAddress);
             distributor.claim(i);
         }
     }
 }
-
-contract DistributorRealWorldTest is Test {}

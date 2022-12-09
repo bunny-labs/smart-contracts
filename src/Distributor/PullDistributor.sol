@@ -5,32 +5,24 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
-import {Base64} from "./Base64.sol";
+import {MembershipToken} from "../MembershipToken/MembershipToken.sol";
 
-contract Distributor is ERC721 {
+contract PullDistributor is MembershipToken {
     /*********
      * Types *
      *********/
-
-    struct Member {
-        address wallet;
-        uint16 shares;
-    }
 
     struct Configuration {
         string name;
         string symbol;
         string imageURI;
         address token;
-        Member[] members;
+        Membership[] members;
     }
 
-    error NoMembers();
-    error TooManyMembers();
     error NothingToDeposit();
     error NothingToRegister();
     error TooLargeDeposit();
-    error NotAMember();
     error NotYourToken();
     error FailedTransfer();
 
@@ -41,8 +33,8 @@ contract Distributor is ERC721 {
      * Variables *
      *************/
 
-    /// Contract code version
-    uint256 public constant CODE_VERSION = 1;
+    /// Contract version
+    uint256 public constant CONTRACT_VERSION = 1_00;
 
     /// Maximum amount of tokens that can be deposited in this contract.
     /// @dev The limit exists so that maximum shares per member (uint16) * maximum deposit (uint240) would never overflow.
@@ -50,13 +42,6 @@ contract Distributor is ERC721 {
 
     /// The underlying ERC20 asset that is distributed to members
     IERC20Metadata public asset;
-
-    /// The total number of members
-    uint8 public totalMembers;
-    /// The total number of shares across all members
-    uint32 public totalShares;
-    /// Mapping to track shares per member
-    mapping(uint256 => uint16) public memberShares;
 
     /// The total amount of underlying asset that has been deposited
     uint256 public totalDeposited;
@@ -72,7 +57,7 @@ contract Distributor is ERC721 {
      * Initialization *
      ******************/
 
-    constructor(Configuration memory config) ERC721("", "") {
+    constructor(Configuration memory config) {
         _initialize(config);
     }
 
@@ -130,44 +115,6 @@ contract Distributor is ERC721 {
      ******************/
 
     /**
-     * Get metadata for the membership token
-     */
-    function tokenURI(uint256 membershipTokenId)
-        public
-        view
-        override
-        returns (string memory)
-    {
-        string memory json = Base64.encode(
-            bytes(
-                string(
-                    abi.encodePacked(
-                        '{"name":"',
-                        name,
-                        " #",
-                        Strings.toString(membershipTokenId),
-                        '","image":"',
-                        imageURI,
-                        '","attributes":[{"trait_type":"Asset","value":"',
-                        asset.symbol(),
-                        '"},{"trait_type":"Shares","value":',
-                        Strings.toString(memberShares[membershipTokenId]),
-                        ',"max_value":',
-                        Strings.toString(totalShares),
-                        '},{"trait_type":"Claimable tokens","value":',
-                        Strings.toString(claimableTokens(membershipTokenId)),
-                        ',"max_value":',
-                        Strings.toString(totalDeposited),
-                        "}]}"
-                    )
-                )
-            )
-        );
-
-        return string(abi.encodePacked("data:application/json;base64,", json));
-    }
-
-    /**
      * Get the amount of unregistered tokens of the underlying asset that are held by this contract.
      */
     function unregisteredTokens() public view returns (uint256) {
@@ -182,10 +129,13 @@ contract Distributor is ERC721 {
         view
         returns (uint256)
     {
-        uint16 shares = memberShares[membershipTokenId];
-        uint256 memberTokens = (totalDeposited * uint256(shares)) /
-            uint256(totalShares);
+        uint224 total = totalDeposited > type(uint224).max
+            ? type(uint224).max
+            : uint224(totalDeposited);
+
+        uint256 memberTokens = tokenShare(membershipTokenId, total);
         uint256 claimedTokens = memberClaimed[membershipTokenId];
+
         return memberTokens - claimedTokens;
     }
 
@@ -198,41 +148,10 @@ contract Distributor is ERC721 {
      * @param config Configuration struct to use for initialization.
      */
     function _initialize(Configuration memory config) internal {
-        name = config.name;
-        symbol = config.symbol;
         imageURI = config.imageURI;
-
         asset = IERC20Metadata(config.token);
-        _importMembers(config.members);
-    }
 
-    /**
-     * @dev Import members into the contract.
-     * @param newMembers List of new members to add.
-     */
-    function _importMembers(Member[] memory newMembers) internal {
-        uint256 newMemberCount = newMembers.length;
-
-        if (newMemberCount == 0) revert NoMembers();
-        if (newMemberCount > type(uint8).max) revert TooManyMembers();
-
-        for (uint256 i = 0; i < newMemberCount; i++) {
-            _importMember(newMembers[i]);
-        }
-    }
-
-    /**
-     * @dev Import a single member into the contract
-     * @param newMember Member details for the new member
-     */
-    function _importMember(Member memory newMember) internal {
-        uint256 membershipTokenId = totalMembers;
-
-        totalMembers += 1;
-        totalShares += newMember.shares;
-        memberShares[membershipTokenId] = newMember.shares;
-
-        _mint(newMember.wallet, membershipTokenId);
+        MembershipToken._initialize(config.name, config.symbol, config.members);
     }
 
     /**
@@ -252,7 +171,6 @@ contract Distributor is ERC721 {
      */
     function _claim(uint256 membershipTokenId) internal {
         if (msg.sender != ownerOf(membershipTokenId)) revert NotYourToken();
-
         uint256 claimAmount = claimableTokens(membershipTokenId);
 
         memberClaimed[membershipTokenId] += claimAmount;
@@ -261,13 +179,5 @@ contract Distributor is ERC721 {
 
         bool success = asset.transfer(ownerOf(membershipTokenId), claimAmount);
         if (!success) revert FailedTransfer();
-    }
-
-    /**
-     * @dev Restrict function to be called by members only.
-     */
-    modifier memberOnly() {
-        if (balanceOf(msg.sender) == 0) revert NotAMember();
-        _;
     }
 }

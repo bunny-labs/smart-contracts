@@ -13,3 +13,6 @@ out/
 # Coverage files
 lcov.info
 report/
+
+# Private tests
+test/*.private.t.sol

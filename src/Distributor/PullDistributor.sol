@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import {ERC721} from "solmate/tokens/ERC721.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 import {MembershipToken} from "../MembershipToken/MembershipToken.sol";
 
@@ -15,7 +13,6 @@ contract PullDistributor is MembershipToken {
     struct Configuration {
         string name;
         string symbol;
-        string imageURI;
         address token;
         Membership[] members;
     }
@@ -36,22 +33,15 @@ contract PullDistributor is MembershipToken {
     /// Contract version
     uint256 public constant CONTRACT_VERSION = 1_00;
 
-    /// Maximum amount of tokens that can be deposited in this contract.
-    /// @dev The limit exists so that maximum shares per member (uint16) * maximum deposit (uint240) would never overflow.
-    uint256 public constant MAXIMUM_DEPOSIT = type(uint240).max;
-
     /// The underlying ERC20 asset that is distributed to members
-    IERC20Metadata public asset;
+    IERC20 public token;
 
     /// The total amount of underlying asset that has been deposited
-    uint256 public totalDeposited;
+    uint224 public totalDeposited;
     /// The total amount of underlying asset that has been claimed
-    uint256 public totalClaimed;
+    uint224 public totalClaimed;
     /// Mapping to track the amount of underlying asset claimed by each member
-    mapping(uint256 => uint256) public memberClaimed;
-
-    /// URI of the image asset to use in NFT metadata
-    string public imageURI;
+    mapping(uint256 => uint224) public memberClaimed;
 
     /******************
      * Initialization *
@@ -71,12 +61,14 @@ contract PullDistributor is MembershipToken {
      * @param treasury Address the funds will be pulled from.
      */
     function deposit(address treasury) external memberOnly {
-        uint256 balance = asset.balanceOf(treasury);
+        uint256 balance = token.balanceOf(treasury);
 
         if (balance == 0) revert NothingToDeposit();
-        if (balance > MAXIMUM_DEPOSIT) revert TooLargeDeposit();
+        if (balance + totalDeposited > type(uint224).max) {
+            revert TooLargeDeposit();
+        }
 
-        bool success = asset.transferFrom(treasury, address(this), balance);
+        bool success = token.transferFrom(treasury, address(this), balance);
         if (!success) revert FailedTransfer();
 
         _registerTokens();
@@ -91,7 +83,7 @@ contract PullDistributor is MembershipToken {
     }
 
     /**
-     * Claim all available tokens for the specified member.
+     * Claim all available tokens for the specified membership token.
      * @dev Callable only by the owner of the membership token.
      * @param membershipTokenId The ID of the membership token used for claiming.
      */
@@ -117,8 +109,11 @@ contract PullDistributor is MembershipToken {
     /**
      * Get the amount of unregistered tokens of the underlying asset that are held by this contract.
      */
-    function unregisteredTokens() public view returns (uint256) {
-        return asset.balanceOf(address(this)) + totalClaimed - totalDeposited;
+    function unregisteredTokens() public view returns (uint224) {
+        return
+            uint224(token.balanceOf(address(this))) +
+            totalClaimed -
+            totalDeposited;
     }
 
     /**
@@ -127,14 +122,10 @@ contract PullDistributor is MembershipToken {
     function claimableTokens(uint256 membershipTokenId)
         public
         view
-        returns (uint256)
+        returns (uint224)
     {
-        uint224 total = totalDeposited > type(uint224).max
-            ? type(uint224).max
-            : uint224(totalDeposited);
-
-        uint256 memberTokens = tokenShare(membershipTokenId, total);
-        uint256 claimedTokens = memberClaimed[membershipTokenId];
+        uint224 memberTokens = tokenShare(membershipTokenId, totalDeposited);
+        uint224 claimedTokens = memberClaimed[membershipTokenId];
 
         return memberTokens - claimedTokens;
     }
@@ -148,9 +139,7 @@ contract PullDistributor is MembershipToken {
      * @param config Configuration struct to use for initialization.
      */
     function _initialize(Configuration memory config) internal {
-        imageURI = config.imageURI;
-        asset = IERC20Metadata(config.token);
-
+        token = IERC20(config.token);
         MembershipToken._initialize(config.name, config.symbol, config.members);
     }
 
@@ -158,7 +147,7 @@ contract PullDistributor is MembershipToken {
      * @dev Register any unaccounted tokens of the underlying asset
      */
     function _registerTokens() internal {
-        uint256 tokenAmount = unregisteredTokens();
+        uint224 tokenAmount = unregisteredTokens();
         if (tokenAmount == 0) revert NothingToRegister();
 
         totalDeposited += tokenAmount;
@@ -171,13 +160,13 @@ contract PullDistributor is MembershipToken {
      */
     function _claim(uint256 membershipTokenId) internal {
         if (msg.sender != ownerOf(membershipTokenId)) revert NotYourToken();
-        uint256 claimAmount = claimableTokens(membershipTokenId);
+        uint224 claimAmount = claimableTokens(membershipTokenId);
 
         memberClaimed[membershipTokenId] += claimAmount;
         totalClaimed += claimAmount;
         emit Claim(membershipTokenId, claimAmount);
 
-        bool success = asset.transfer(ownerOf(membershipTokenId), claimAmount);
+        bool success = token.transfer(ownerOf(membershipTokenId), claimAmount);
         if (!success) revert FailedTransfer();
     }
 }

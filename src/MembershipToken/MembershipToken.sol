@@ -44,9 +44,11 @@ abstract contract MembershipToken is ERC721("", "") {
     function tokenShare(uint256 tokenId, uint224 value)
         public
         view
-        returns (uint256)
+        returns (uint224)
     {
-        return (uint256(value) * membershipWeight[tokenId]) / totalWeights;
+        unchecked {
+            return ((value * membershipWeight[tokenId]) / totalWeights);
+        }
     }
 
     /**

@@ -9,10 +9,19 @@ import "../src/MembershipToken/MembershipToken.sol";
 import "./Utils.sol";
 
 contract PullDistributorTest is Test {
+    PullDistributor distributor;
     TestToken token;
+
+    address firstMember;
+    address nonMember;
+    address treasury;
 
     function setUp() public virtual {
         token = new TestToken();
+
+        firstMember = makeAddr("0");
+        nonMember = makeAddr("nonMember");
+        treasury = makeAddr("treasury");
     }
 
     function setupMembers(uint256 memberCount)
@@ -42,61 +51,38 @@ contract PullDistributorInitializationTest is PullDistributorTest {
         PullDistributorTest.setUp();
     }
 
-    function testCanInitialize() public {
-        new PullDistributor(
+    function testCanInitialize(
+        string memory name,
+        string memory symbol,
+        address token,
+        uint8 memberCount
+    ) public {
+        distributor = new PullDistributor(
             PullDistributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: address(token),
-                members: setupMembers(38)
-            })
-        );
-    }
-
-    function testCanInitializeImageURI(string memory imageURI) public {
-        PullDistributor distributor = new PullDistributor(
-            PullDistributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: imageURI,
-                token: address(token),
-                members: setupMembers(38)
+                name: name,
+                symbol: symbol,
+                token: token,
+                members: setupMembers(memberCount)
             })
         );
 
-        assertEq(distributor.imageURI(), imageURI);
+        assertEq(distributor.name(), name);
+        assertEq(distributor.symbol(), symbol);
+        assertEq(address(distributor.token()), token);
+        assertEq(distributor.totalSupply(), memberCount);
+
+        assertEq(distributor.CONTRACT_VERSION(), 1_00);
+        assertEq(distributor.totalDeposited(), 0);
+        assertEq(distributor.totalClaimed(), 0);
     }
 
-    function testCanInitializeAssetAddress(address testToken) public {
-        PullDistributor distributor = new PullDistributor(
-            PullDistributor.Configuration({
-                name: "VCooors",
-                symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
-                token: testToken,
-                members: setupMembers(38)
-            })
-        );
-
-        assertEq(address(distributor.asset()), testToken);
-    }
-}
-
-contract PullDistributorMetadataTest is PullDistributorTest {
-    function setUp() public override {
-        PullDistributorTest.setUp();
-    }
-
-    function testCanQueryMetadata() public {
-        uint16 memberCount = 3;
+    function testCanQueryMetadata(uint8 memberCount) public {
         vm.assume(memberCount > 0);
 
-        PullDistributor distributor = new PullDistributor(
+        distributor = new PullDistributor(
             PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(memberCount)
             })
@@ -105,26 +91,20 @@ contract PullDistributorMetadataTest is PullDistributorTest {
         for (uint16 i; i < memberCount; i++) {
             distributor.tokenURI(i);
         }
+
+        vm.expectRevert();
+        distributor.tokenURI(memberCount);
     }
 }
 
 contract PullDistributorDepositTest is PullDistributorTest {
-    address treasury;
-    address firstMember;
-
-    PullDistributor distributor;
-
     function setUp() public override {
         PullDistributorTest.setUp();
-
-        treasury = makeAddr("treasury");
-        firstMember = makeAddr("0");
 
         distributor = new PullDistributor(
             PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(38)
             })
@@ -134,11 +114,14 @@ contract PullDistributorDepositTest is PullDistributorTest {
         token.approve(address(distributor), type(uint256).max);
     }
 
-    function testCanDeposit(uint256 amount) public {
+    function testCanDeposit(uint224 amount) public {
         vm.assume(amount > 0);
-        vm.assume(amount < distributor.MAXIMUM_DEPOSIT());
 
         token.mint(treasury, amount);
+
+        assertEq(token.balanceOf(treasury), amount);
+        assertEq(token.balanceOf(address(distributor)), 0);
+        assertEq(distributor.totalDeposited(), 0);
 
         vm.prank(firstMember);
         distributor.deposit(treasury);
@@ -148,14 +131,14 @@ contract PullDistributorDepositTest is PullDistributorTest {
         assertEq(distributor.totalDeposited(), amount);
     }
 
-    function testCanDepositByAnyMember(uint232 amount) public {
+    function testCanDepositByAnyMember(uint208 amount) public {
         vm.assume(amount > 0);
 
         uint16 totalSupply = distributor.totalSupply();
         for (uint16 i; i < totalSupply; i++) {
-            address member = makeAddr(Strings.toString(i));
             token.mint(treasury, amount);
-            vm.prank(member);
+
+            vm.prank(makeAddr(Strings.toString(i)));
             distributor.deposit(treasury);
         }
 
@@ -165,8 +148,16 @@ contract PullDistributorDepositTest is PullDistributorTest {
         );
     }
 
+    function testCannotDepositIfNotAMember() public {
+        token.mint(treasury, 420);
+
+        vm.expectRevert(MembershipToken.NotAMember.selector);
+        vm.prank(nonMember);
+        distributor.deposit(treasury);
+    }
+
     function testCanDepositMaxAmount() public {
-        uint256 amount = distributor.MAXIMUM_DEPOSIT();
+        uint256 amount = type(uint224).max;
 
         token.mint(treasury, amount);
 
@@ -179,21 +170,11 @@ contract PullDistributorDepositTest is PullDistributorTest {
     }
 
     function testCannotDepositOverMaxAmount() public {
-        uint256 amount = uint256(distributor.MAXIMUM_DEPOSIT()) + 1;
+        uint256 amount = uint256(type(uint224).max) + 1;
         token.mint(treasury, amount);
 
         vm.expectRevert(PullDistributor.TooLargeDeposit.selector);
         vm.prank(firstMember);
-        distributor.deposit(treasury);
-    }
-
-    function testCannotDepositIfNotAMember() public {
-        address nonMember = makeAddr("NotAMember");
-
-        token.mint(treasury, 420);
-
-        vm.expectRevert(MembershipToken.NotAMember.selector);
-        vm.prank(nonMember);
         distributor.deposit(treasury);
     }
 
@@ -211,43 +192,6 @@ contract PullDistributorDepositTest is PullDistributorTest {
         vm.expectRevert();
         vm.prank(firstMember);
         distributor.deposit(treasury);
-    }
-
-    function testCanTransferAssetWhenDepositing(uint256 depositAmount) public {
-        vm.assume(depositAmount > 0);
-        vm.assume(depositAmount < distributor.MAXIMUM_DEPOSIT());
-
-        token.mint(treasury, depositAmount);
-
-        assertEq(token.balanceOf(treasury), depositAmount);
-        assertEq(token.balanceOf(address(distributor)), 0);
-
-        vm.prank(firstMember);
-        distributor.deposit(treasury);
-
-        assertEq(token.balanceOf(treasury), 0);
-        assertEq(token.balanceOf(address(distributor)), depositAmount);
-    }
-
-    function testCanRegisterDepositedTokens(uint256 depositAmount) public {
-        vm.assume(depositAmount > 0);
-        vm.assume(depositAmount < distributor.MAXIMUM_DEPOSIT());
-
-        token.mint(treasury, depositAmount);
-        vm.prank(firstMember);
-        distributor.deposit(treasury);
-
-        assertEq(distributor.totalDeposited(), depositAmount);
-    }
-
-    function testCanRegisterMaxDeposit() public {
-        uint256 depositAmount = distributor.MAXIMUM_DEPOSIT();
-        token.mint(treasury, depositAmount);
-
-        vm.prank(firstMember);
-        distributor.deposit(treasury);
-
-        assertEq(distributor.totalDeposited(), depositAmount);
     }
 
     function testCanDepositAfterClaiming(
@@ -279,24 +223,13 @@ contract PullDistributorDepositTest is PullDistributorTest {
 }
 
 contract PullDistributorRegisterTest is PullDistributorTest {
-    address firstMember;
-    address nonMember;
-    address treasury;
-
-    PullDistributor distributor;
-
     function setUp() public override {
         PullDistributorTest.setUp();
-
-        firstMember = makeAddr("0");
-        nonMember = makeAddr("nonMember");
-        treasury = makeAddr("treasury");
 
         distributor = new PullDistributor(
             PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(38)
             })
@@ -312,6 +245,7 @@ contract PullDistributorRegisterTest is PullDistributorTest {
     ) public {
         vm.assume(depositAmount > 0);
         vm.assume(transferAmount > 0);
+
         uint256 totalAmount = uint256(depositAmount) + uint256(transferAmount);
 
         // We start with an empty contract and transfer tokens in
@@ -337,32 +271,12 @@ contract PullDistributorRegisterTest is PullDistributorTest {
         assertEq(distributor.totalDeposited(), totalAmount);
     }
 
-    function testCanRegisterUnaccountedTokens(uint256 tokenAmount) public {
+    function testCanRegisterUnaccountedTokens(uint224 tokenAmount) public {
         vm.assume(tokenAmount > 0);
-        vm.assume(tokenAmount < distributor.MAXIMUM_DEPOSIT());
 
         token.mint(address(distributor), tokenAmount);
 
-        vm.prank(firstMember);
-        distributor.register();
-
-        assertEq(distributor.totalDeposited(), tokenAmount);
-    }
-
-    function testCannotRegisterIfNotAMember(uint256 tokenAmount) public {
-        vm.assume(tokenAmount > 0);
-        vm.assume(tokenAmount < distributor.MAXIMUM_DEPOSIT());
-
-        token.mint(address(distributor), tokenAmount);
-
-        vm.expectRevert(MembershipToken.NotAMember.selector);
-        vm.prank(nonMember);
-        distributor.register();
-    }
-
-    function testCanRegisterMaxDepositableTokens() public {
-        uint256 tokenAmount = distributor.MAXIMUM_DEPOSIT();
-        token.mint(address(distributor), tokenAmount);
+        assertEq(distributor.totalDeposited(), 0);
 
         vm.prank(firstMember);
         distributor.register();
@@ -375,25 +289,24 @@ contract PullDistributorRegisterTest is PullDistributorTest {
         vm.prank(firstMember);
         distributor.register();
     }
+
+    function testCannotRegisterIfNotAMember() public {
+        token.mint(address(distributor), 420);
+
+        vm.expectRevert(MembershipToken.NotAMember.selector);
+        vm.prank(nonMember);
+        distributor.register();
+    }
 }
 
 contract PullDistributorClaimTest is PullDistributorTest {
-    address treasury;
-    address member;
-
-    PullDistributor distributor;
-
     function setUp() public override {
         PullDistributorTest.setUp();
-
-        treasury = makeAddr("treasury");
-        member = makeAddr("0");
 
         distributor = new PullDistributor(
             PullDistributor.Configuration({
                 name: "VCooors",
                 symbol: "VCOOOR",
-                imageURI: "ipfs://hash",
                 token: address(token),
                 members: setupMembers(38)
             })
@@ -403,31 +316,37 @@ contract PullDistributorClaimTest is PullDistributorTest {
         token.approve(address(distributor), type(uint256).max);
     }
 
-    function testCanClaimTokens(uint256 tokenAmount) public {
+    function testCanClaimTokens() public {
         uint16 memberCount = distributor.totalSupply();
-        vm.assume(tokenAmount >= memberCount);
-        vm.assume(tokenAmount < distributor.MAXIMUM_DEPOSIT());
+        uint256 totalTokens = distributor.totalWeights();
 
-        token.mint(treasury, tokenAmount);
-        vm.prank(member);
+        token.mint(treasury, totalTokens);
+        vm.prank(firstMember);
         distributor.deposit(treasury);
 
         for (uint16 i; i < memberCount; i++) {
-            address memberAddress = makeAddr(Strings.toString(i));
-            vm.prank(memberAddress);
+            address member = makeAddr(Strings.toString(i));
+
+            assertEq(token.balanceOf(member), 0);
+            assertEq(distributor.memberClaimed(i), 0);
+
+            vm.prank(member);
             distributor.claim(i);
+
+            assertEq(token.balanceOf(member), distributor.membershipWeight(i));
+            assertEq(distributor.memberClaimed(i), token.balanceOf(member));
         }
 
-        // Only dust is left
-        assertTrue(token.balanceOf(address(distributor)) < memberCount);
+        assertEq(token.balanceOf(address(distributor)), 0);
+        assertEq(distributor.totalClaimed(), totalTokens);
     }
 
     function testCanClaimFromMaxDeposit() public {
         uint16 memberCount = distributor.totalSupply();
-        uint256 tokenAmount = distributor.MAXIMUM_DEPOSIT();
+        uint256 tokenAmount = type(uint224).max;
 
         token.mint(treasury, tokenAmount);
-        vm.prank(member);
+        vm.prank(firstMember);
         distributor.deposit(treasury);
 
         for (uint16 i; i < memberCount; i++) {
@@ -436,34 +355,32 @@ contract PullDistributorClaimTest is PullDistributorTest {
             distributor.claim(i);
         }
 
-        // Only dust is left
         assertLt(token.balanceOf(address(distributor)), memberCount);
     }
 
     function testCannotClaimIfNotAMember() public {
         token.mint(treasury, 420);
-        vm.prank(member);
+        vm.prank(firstMember);
         distributor.deposit(treasury);
 
-        address nonMember = makeAddr("NotAMember");
         vm.expectRevert(PullDistributor.NotYourToken.selector);
         vm.prank(nonMember);
         distributor.claim(0);
     }
 
-    function testCannotClaimIfNotYourToken(uint256 tokenAmount) public {
+    function testCannotClaimIfNotYourToken(uint224 tokenAmount) public {
         uint16 memberCount = distributor.totalSupply();
         vm.assume(tokenAmount >= memberCount);
-        vm.assume(tokenAmount < distributor.MAXIMUM_DEPOSIT());
 
         token.mint(treasury, tokenAmount);
-        vm.prank(member);
+        vm.prank(firstMember);
         distributor.deposit(treasury);
 
         for (uint16 i; i < memberCount; i++) {
             address memberAddress = makeAddr(
                 Strings.toString((i + 1) % memberCount)
             );
+
             vm.expectRevert(PullDistributor.NotYourToken.selector);
             vm.prank(memberAddress);
             distributor.claim(i);

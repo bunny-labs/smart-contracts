@@ -4,11 +4,11 @@ pragma solidity ^0.8.16;
 import "forge-std/Test.sol";
 import "openzeppelin-contracts/utils/Strings.sol";
 
-import "../src/Distributor/PushDistributor.sol";
+import "../src/Distributor/Distributor.sol";
 import "../src/MembershipToken/MembershipToken.sol";
 import "./Utils.sol";
 
-contract PushDistributorTest is Test {
+contract DistributorTest is Test {
     TestToken token;
 
     address source;
@@ -50,9 +50,9 @@ contract PushDistributorTest is Test {
         string memory symbol,
         uint8 memberCount
     ) public {
-        PushDistributor.Membership[] memory members = setupMembers(memberCount);
-        PushDistributor distributor = new PushDistributor(
-            PushDistributor.Configuration(name, symbol, members)
+        Distributor.Membership[] memory members = setupMembers(memberCount);
+        Distributor distributor = new Distributor(
+            Distributor.Configuration(name, symbol, members)
         );
 
         assertEq(distributor.name(), name);
@@ -66,8 +66,8 @@ contract PushDistributorTest is Test {
     }
 
     function testCannotDistributeWithoutApproval() public {
-        PushDistributor distributor = new PushDistributor(
-            PushDistributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
+        Distributor distributor = new Distributor(
+            Distributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
         );
 
         token.mint(source, 420);
@@ -78,8 +78,8 @@ contract PushDistributorTest is Test {
     }
 
     function testCannotDistributeUnlessAMember() public {
-        PushDistributor distributor = new PushDistributor(
-            PushDistributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
+        Distributor distributor = new Distributor(
+            Distributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
         );
 
         vm.expectRevert(MembershipToken.NotAMember.selector);
@@ -87,8 +87,8 @@ contract PushDistributorTest is Test {
     }
 
     function testCanDistributeProportionally(uint200 multiplier) public {
-        PushDistributor distributor = new PushDistributor(
-            PushDistributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
+        Distributor distributor = new Distributor(
+            Distributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
         );
 
         uint256 distributionAmount = uint256(distributor.totalWeights()) *
@@ -122,8 +122,8 @@ contract PushDistributorTest is Test {
             memory members = new MembershipToken.Membership[](1);
         members[0] = MembershipToken.Membership(member, type(uint32).max);
 
-        PushDistributor distributor = new PushDistributor(
-            PushDistributor.Configuration("Vcooors", "VCOOOR", members)
+        Distributor distributor = new Distributor(
+            Distributor.Configuration("Vcooors", "VCOOOR", members)
         );
 
         uint256 distributionAmount = uint256(type(uint224).max) + extraAmount;

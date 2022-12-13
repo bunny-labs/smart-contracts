@@ -3,6 +3,7 @@ pragma solidity ^0.8.16;
 
 import "forge-std/Test.sol";
 import "openzeppelin-contracts/utils/Strings.sol";
+import "openzeppelin-contracts/proxy/Clones.sol";
 
 import "../src/Distributor/Distributor.sol";
 import "../src/MembershipToken/MembershipToken.sol";
@@ -63,6 +64,34 @@ contract DistributorTest is Test {
         for (uint256 i = 0; i < memberCount; i++) {
             assertEq(distributor.membershipWeight(i), members[i].weight);
         }
+    }
+
+    function testCannotInitializeAfterDeployment() public {
+        Distributor.Membership[] memory members = setupMembers(42);
+
+        Distributor distributor = new Distributor(
+            Distributor.Configuration("VCooors", "VCOOOR", members)
+        );
+
+        vm.expectRevert("Initializable: contract is already initialized");
+        distributor.initialize(
+            Distributor.Configuration("VCooors", "VCOOOR", members)
+        );
+    }
+
+    function testCanInitializeAfterCloning() public {
+        Distributor.Membership[] memory members = setupMembers(42);
+
+        Distributor original = new Distributor(
+            Distributor.Configuration("VCooors", "VCOOOR", members)
+        );
+
+        address clone = Clones.clone(address(original));
+        Distributor distributor = Distributor(clone);
+
+        distributor.initialize(
+            Distributor.Configuration("VCooors", "VCOOOR", members)
+        );
     }
 
     function testCannotDistributeWithoutApproval() public {

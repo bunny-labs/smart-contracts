@@ -2,10 +2,11 @@
 pragma solidity ^0.8.16;
 
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {Initializable} from "openzeppelin-contracts/proxy/utils/Initializable.sol";
 
 import {MembershipToken} from "../MembershipToken/MembershipToken.sol";
 
-contract Distributor is MembershipToken {
+contract Distributor is MembershipToken, Initializable {
     /*********
      * Types *
      *********/
@@ -35,8 +36,16 @@ contract Distributor is MembershipToken {
      * Initialization *
      ******************/
 
-    constructor(Configuration memory config) {
-        _initialize(config);
+    constructor(Configuration memory config) initializer {
+        initialize(config);
+    }
+
+    /**
+     * Initialize the contract.
+     * @param config Configuration to use for initialization.
+     */
+    function initialize(Configuration memory config) public initializer {
+        MembershipToken._initialize(config.name, config.symbol, config.members);
     }
 
     /******************
@@ -87,13 +96,5 @@ contract Distributor is MembershipToken {
         }
 
         emit Distributed();
-    }
-
-    /**
-     * @dev Initialize contract.
-     * @param config Configuration struct to use for initialization.
-     */
-    function _initialize(Configuration memory config) internal {
-        MembershipToken._initialize(config.name, config.symbol, config.members);
     }
 }

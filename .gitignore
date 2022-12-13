@@ -14,7 +14,10 @@ out/
 lcov.info
 report/
 
-# Private tests
-test/*.private.t.sol
+# Private tests & scripts
+*.private.sol
+*.private.t.sol
+
+# Test outputs
 test/svg/
 test/json/

@@ -11,14 +11,7 @@ contract Distributor is MembershipToken, Initializable {
      * Types *
      *********/
 
-    struct Configuration {
-        string name;
-        string symbol;
-        Membership[] members;
-    }
-
     error FailedTransfer();
-
     event Distributed();
 
     /*************
@@ -36,16 +29,26 @@ contract Distributor is MembershipToken, Initializable {
      * Initialization *
      ******************/
 
-    constructor(Configuration memory config) initializer {
-        initialize(config);
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        Membership[] memory members_
+    ) initializer {
+        initialize(name_, symbol_, members_);
     }
 
     /**
      * Initialize the contract.
-     * @param config Configuration to use for initialization.
+     * @param name_ Token name.
+     * @param symbol_ Token symbol.
+     * @param members_ Memberships to mint.
      */
-    function initialize(Configuration memory config) public initializer {
-        MembershipToken._initialize(config.name, config.symbol, config.members);
+    function initialize(
+        string memory name_,
+        string memory symbol_,
+        Membership[] memory members_
+    ) public initializer {
+        MembershipToken._initialize(name_, symbol_, members_);
     }
 
     /******************
@@ -66,30 +69,10 @@ contract Distributor is MembershipToken, Initializable {
             ? uint224(tokenBalance)
             : MAX_DISTRIBUTION_AMOUNT;
 
-        _distribute(asset, source, distributionAmount);
-    }
-
-    /*************
-     * Internals *
-     *************/
-
-    /**
-     * @dev Internal function to calculate shares and perform distribution.
-     * @param asset The ERC20 token that should be distributed.
-     * @param source The address that we should distribute from.
-     * @param amount The full amount that should be distributed.
-     */
-    function _distribute(
-        address asset,
-        address source,
-        uint224 amount
-    ) internal {
-        IERC20 token = IERC20(asset);
-
         uint256 totalMemberships = totalSupply;
         for (uint256 tokenId = 0; tokenId < totalMemberships; tokenId++) {
             address member = ownerOf(tokenId);
-            uint256 tokens = tokenShare(tokenId, amount);
+            uint256 tokens = tokenShare(tokenId, distributionAmount);
 
             bool success = token.transferFrom(source, member, tokens);
             if (!success) revert FailedTransfer();

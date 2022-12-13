@@ -52,9 +52,7 @@ contract DistributorTest is Test {
         uint8 memberCount
     ) public {
         Distributor.Membership[] memory members = setupMembers(memberCount);
-        Distributor distributor = new Distributor(
-            Distributor.Configuration(name, symbol, members)
-        );
+        Distributor distributor = new Distributor(name, symbol, members);
 
         assertEq(distributor.name(), name);
         assertEq(distributor.symbol(), symbol);
@@ -69,34 +67,28 @@ contract DistributorTest is Test {
     function testCannotInitializeAfterDeployment() public {
         Distributor.Membership[] memory members = setupMembers(42);
 
-        Distributor distributor = new Distributor(
-            Distributor.Configuration("VCooors", "VCOOOR", members)
-        );
+        Distributor distributor = new Distributor("VCooors", "VCOOOR", members);
 
         vm.expectRevert("Initializable: contract is already initialized");
-        distributor.initialize(
-            Distributor.Configuration("VCooors", "VCOOOR", members)
-        );
+        distributor.initialize("VCooors", "VCOOOR", members);
     }
 
     function testCanInitializeAfterCloning() public {
         Distributor.Membership[] memory members = setupMembers(42);
 
-        Distributor original = new Distributor(
-            Distributor.Configuration("VCooors", "VCOOOR", members)
-        );
+        Distributor original = new Distributor("VCooors", "VCOOOR", members);
 
         address clone = Clones.clone(address(original));
         Distributor distributor = Distributor(clone);
 
-        distributor.initialize(
-            Distributor.Configuration("VCooors", "VCOOOR", members)
-        );
+        distributor.initialize("VCooors", "VCOOOR", members);
     }
 
     function testCannotDistributeWithoutApproval() public {
         Distributor distributor = new Distributor(
-            Distributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
+            "Vcooors",
+            "VCOOOR",
+            setupMembers(38)
         );
 
         token.mint(source, 420);
@@ -108,7 +100,9 @@ contract DistributorTest is Test {
 
     function testCannotDistributeUnlessAMember() public {
         Distributor distributor = new Distributor(
-            Distributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
+            "Vcooors",
+            "VCOOOR",
+            setupMembers(38)
         );
 
         vm.expectRevert(MembershipToken.NotAMember.selector);
@@ -117,7 +111,9 @@ contract DistributorTest is Test {
 
     function testCanDistributeProportionally(uint200 multiplier) public {
         Distributor distributor = new Distributor(
-            Distributor.Configuration("Vcooors", "VCOOOR", setupMembers(38))
+            "Vcooors",
+            "VCOOOR",
+            setupMembers(38)
         );
 
         uint256 distributionAmount = uint256(distributor.totalWeights()) *
@@ -151,9 +147,7 @@ contract DistributorTest is Test {
             memory members = new MembershipToken.Membership[](1);
         members[0] = MembershipToken.Membership(member, type(uint32).max);
 
-        Distributor distributor = new Distributor(
-            Distributor.Configuration("Vcooors", "VCOOOR", members)
-        );
+        Distributor distributor = new Distributor("Vcooors", "VCOOOR", members);
 
         uint256 distributionAmount = uint256(type(uint224).max) + extraAmount;
         token.mint(source, distributionAmount);

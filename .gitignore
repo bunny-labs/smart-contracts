@@ -16,3 +16,5 @@ report/
 
 # Private tests
 test/*.private.t.sol
+test/svg/
+test/json/

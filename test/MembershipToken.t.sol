@@ -193,7 +193,43 @@ contract MembershipTokenTest is Test {
         assertEq(token.tokenShare(0, type(uint224).max), type(uint224).max);
     }
 
-    function testCanReturnMetadata(uint8 memberCount) public {
+    function testCanGenerateTokenImages(uint8 memberCount) public {
+        vm.assume(memberCount > 0);
+
+        MockMembership token = new MockMembership(
+            "VCooors",
+            "VCOOOR",
+            setupMembers(memberCount)
+        );
+
+        for (uint256 i; i < memberCount; i++) {
+            token.tokenImage(i);
+        }
+
+        vm.expectRevert(MembershipToken.TokenDoesNotExist.selector);
+        token.tokenImage(memberCount);
+    }
+
+    function testCanGenerateTokenMetadata(uint8 memberCount) public {
+        vm.assume(memberCount > 0);
+
+        MockMembership token = new MockMembership(
+            "VCooors",
+            "VCOOOR",
+            setupMembers(memberCount)
+        );
+
+        for (uint256 i; i < memberCount; i++) {
+            token.tokenMetadata(i);
+        }
+
+        vm.expectRevert(MembershipToken.TokenDoesNotExist.selector);
+        token.tokenMetadata(memberCount);
+    }
+
+    function testCanGenerateTokenUris(uint8 memberCount) public {
+        vm.assume(memberCount > 0);
+
         MockMembership token = new MockMembership(
             "VCooors",
             "VCOOOR",

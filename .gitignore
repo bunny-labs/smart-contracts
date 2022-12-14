@@ -9,6 +9,7 @@ out/
 
 # Dotenv file
 .env
+.envrc
 
 # Coverage files
 lcov.info
@@ -21,3 +22,6 @@ report/
 # Test outputs
 test/svg/
 test/json/
+
+# Constructor args
+args/

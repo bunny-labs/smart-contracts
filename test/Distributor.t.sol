@@ -140,6 +140,48 @@ contract DistributorTest is Test {
         }
     }
 
+    function testCanDistributeAfterTransferring() public {
+        Distributor distributor = new Distributor(
+            "Vcooors",
+            "VCOOOR",
+            setupMembers(38)
+        );
+
+        uint256 distributionAmount = uint256(distributor.totalWeights());
+        token.mint(source, distributionAmount);
+        assertEq(token.balanceOf(source), distributionAmount);
+
+        vm.prank(source);
+        token.approve(address(distributor), type(uint256).max);
+
+        for (uint256 i = 1; i < distributor.totalSupply(); i++) {
+            address oldMember = makeAddr(vm.toString(i));
+            address newMember = makeAddr(vm.toString(i * 100));
+
+            assertEq(distributor.balanceOf(oldMember), 1);
+            assertEq(distributor.balanceOf(newMember), 0);
+            assertEq(distributor.ownerOf(i), oldMember);
+
+            vm.prank(oldMember);
+            distributor.transferFrom(oldMember, newMember, i);
+
+            assertEq(distributor.balanceOf(oldMember), 0);
+            assertEq(distributor.balanceOf(newMember), 1);
+            assertEq(distributor.ownerOf(i), newMember);
+        }
+
+        vm.prank(member);
+        distributor.distribute(address(token), source);
+
+        assertEq(token.balanceOf(source), 0);
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(
+                token.balanceOf(distributor.ownerOf(i)),
+                uint256(distributor.membershipWeight(i))
+            );
+        }
+    }
+
     function testCanDistributeLargeAmounts(uint32 extraAmount) public {
         vm.assume(extraAmount > 0);
 

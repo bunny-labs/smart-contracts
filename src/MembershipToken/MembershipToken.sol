@@ -4,7 +4,7 @@ pragma solidity ^0.8.16;
 import {ERC721} from "solmate/tokens/ERC721.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
-import {Base64} from "./Base64.sol";
+import {Base64} from "../shared/Base64.sol";
 
 abstract contract MembershipToken is ERC721("", "") {
     /*********

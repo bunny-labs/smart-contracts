@@ -2,12 +2,21 @@
 pragma solidity ^0.8.16;
 
 import "forge-std/Test.sol";
+import "solmate/tokens/ERC20.sol";
 import "openzeppelin-contracts/utils/Strings.sol";
 import "openzeppelin-contracts/proxy/Clones.sol";
 
 import "../src/Distributor/Distributor.sol";
 import "../src/MembershipToken/MembershipToken.sol";
 import "./Utils.sol";
+
+contract TestToken is ERC20 {
+    constructor() ERC20("TestToken", "TEST", 18) {}
+
+    function mint(address to, uint256 amount) public {
+        _mint(to, amount);
+    }
+}
 
 contract DistributorTest is Test {
     TestToken token;

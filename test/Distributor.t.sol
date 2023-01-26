@@ -69,7 +69,7 @@ contract DistributorTest is Test {
         assertEq(distributor.name(), name);
         assertEq(distributor.symbol(), symbol);
         assertEq(distributor.totalSupply(), members.length);
-        assertEq(distributor.CONTRACT_VERSION(), 1_00);
+        assertEq(distributor.CONTRACT_VERSION(), 2_00);
 
         assertEq(distributor.cloningConfig().author, author);
         assertEq(distributor.cloningConfig().feeBps, feeBps);
@@ -87,7 +87,7 @@ contract DistributorTest is Test {
         assertEq(clone.name(), name);
         assertEq(clone.symbol(), symbol);
         assertEq(clone.totalSupply(), members.length);
-        assertEq(clone.CONTRACT_VERSION(), 1_00);
+        assertEq(clone.CONTRACT_VERSION(), 2_00);
 
         assertEq(distributor.cloningConfig().author, defaultCloningConfig.author);
         assertEq(distributor.cloningConfig().feeBps, defaultCloningConfig.feeBps);

@@ -20,7 +20,7 @@ contract Distributor is MembershipToken, Clonable {
     //***********//
 
     /// Contract version
-    uint256 public constant CONTRACT_VERSION = 1_00;
+    uint256 public constant CONTRACT_VERSION = 2_00;
 
     /// Maximum token amount that can be distributed at once.
     /// This is to avoid overflows when calculating member shares.

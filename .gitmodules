@@ -7,3 +7,6 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "lib/bunny-libs"]
+	path = lib/bunny-libs
+	url = https://github.com/bunny-labs/bunny-libs

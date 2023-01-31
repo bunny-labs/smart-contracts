@@ -1,4 +1,4 @@
-name: test
+name: smart-contracts/contracts
 
 on:
   push:
@@ -8,12 +8,15 @@ on:
 env:
   FOUNDRY_PROFILE: ci
 
+defaults:
+  run:
+    working-directory: ./contracts
+
 jobs:
-  check:
+  test:
+    name: Foundry tests
     strategy:
       fail-fast: true
-
-    name: Foundry project
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

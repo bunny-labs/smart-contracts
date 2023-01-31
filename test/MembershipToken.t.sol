@@ -4,7 +4,6 @@ pragma solidity ^0.8.16;
 import "forge-std/Test.sol";
 
 import "../src/MembershipToken/MembershipToken.sol";
-import "./Utils.sol";
 
 contract MockMembership is MembershipToken {
     constructor(
@@ -29,13 +28,27 @@ contract MockMembership is MembershipToken {
 contract MembershipTokenTest is Test {
     MembershipToken.Membership[] noMembers;
 
+    function expand16(uint16 seed, uint256 size)
+        public
+        pure
+        returns (uint16[] memory)
+    {
+        uint16[] memory numbers = new uint16[](size);
+        for (uint256 i; i < size; i++) {
+            numbers[i] = uint16(
+                uint256(keccak256(abi.encodePacked(seed, i))) % type(uint16).max
+            );
+        }
+        return numbers;
+    }
+
     function setupMembers(uint256 memberCount)
         public
         returns (MembershipToken.Membership[] memory)
     {
         MembershipToken.Membership[]
             memory members = new MembershipToken.Membership[](memberCount);
-        uint16[] memory shares = Utils.expand16(
+        uint16[] memory shares = expand16(
             uint16(memberCount % type(uint16).max),
             memberCount
         );

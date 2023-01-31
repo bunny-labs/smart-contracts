@@ -8,7 +8,6 @@ import "openzeppelin-contracts/proxy/Clones.sol";
 
 import "../src/Distributor/Distributor.sol";
 import "../src/MembershipToken/MembershipToken.sol";
-import "./Utils.sol";
 
 contract TestToken is ERC20 {
     constructor() ERC20("TestToken", "TEST", 18) {}
@@ -43,9 +42,23 @@ contract DistributorTest is Test {
         );
     }
 
+    function expand16(uint16 seed, uint256 size)
+        public
+        pure
+        returns (uint16[] memory)
+    {
+        uint16[] memory numbers = new uint16[](size);
+        for (uint256 i; i < size; i++) {
+            numbers[i] = uint16(
+                uint256(keccak256(abi.encodePacked(seed, i))) % type(uint16).max
+            );
+        }
+        return numbers;
+    }
+
     function setupMembers(uint256 memberCount) public returns (MembershipToken.Membership[] memory) {
         MembershipToken.Membership[] memory members = new MembershipToken.Membership[](memberCount);
-        uint16[] memory shares = Utils.expand16(uint16(memberCount % type(uint16).max), memberCount);
+        uint16[] memory shares = expand16(uint16(memberCount % type(uint16).max), memberCount);
 
         for (uint256 i; i < memberCount; i++) {
             members[i] = MembershipToken.Membership(makeAddr(Strings.toString(uint256(i))), shares[i]);

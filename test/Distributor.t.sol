@@ -5,9 +5,9 @@ import "forge-std/Test.sol";
 import "solmate/tokens/ERC20.sol";
 import "openzeppelin-contracts/utils/Strings.sol";
 import "openzeppelin-contracts/proxy/Clones.sol";
+import "bunny-libs/MembershipToken/MembershipToken.sol";
 
 import "../src/Distributor/Distributor.sol";
-import "../src/MembershipToken/MembershipToken.sol";
 
 contract TestToken is ERC20 {
     constructor() ERC20("TestToken", "TEST", 18) {}

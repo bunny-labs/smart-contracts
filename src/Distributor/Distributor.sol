@@ -3,8 +3,7 @@ pragma solidity ^0.8.16;
 
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {Clonable} from "bunny-libs/Clonable/Clonable.sol";
-
-import {MembershipToken} from "../MembershipToken/MembershipToken.sol";
+import {MembershipToken} from "bunny-libs/MembershipToken/MembershipToken.sol";
 
 contract Distributor is MembershipToken, Clonable {
     //********//

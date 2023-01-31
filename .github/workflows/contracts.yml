@@ -1,4 +1,4 @@
-name: smart-contracts/contracts
+name: contracts
 
 on:
   push:

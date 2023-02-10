@@ -1,5 +1,0 @@
-bunny-libs/=contracts/lib/bunny-libs/src/
-ds-test/=contracts/lib/forge-std/lib/ds-test/src/
-forge-std/=contracts/lib/forge-std/src/
-openzeppelin-contracts/=contracts/lib/bunny-libs/lib/openzeppelin-contracts/contracts/
-solmate/=contracts/lib/solmate/src/

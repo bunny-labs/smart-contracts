@@ -42,16 +42,10 @@ contract DistributorTest is Test {
         );
     }
 
-    function expand16(uint16 seed, uint256 size)
-        public
-        pure
-        returns (uint16[] memory)
-    {
+    function expand16(uint16 seed, uint256 size) public pure returns (uint16[] memory) {
         uint16[] memory numbers = new uint16[](size);
         for (uint256 i; i < size; i++) {
-            numbers[i] = uint16(
-                uint256(keccak256(abi.encodePacked(seed, i))) % type(uint16).max
-            );
+            numbers[i] = uint16(uint256(keccak256(abi.encodePacked(seed, i))) % type(uint16).max);
         }
         return numbers;
     }
@@ -95,7 +89,7 @@ contract DistributorTest is Test {
 
     function testCanBeCloned(string memory name, string memory symbol, uint8 memberCount) public {
         Distributor.Membership[] memory members = setupMembers(memberCount);
-        Distributor clone = Distributor(distributor.clone(distributor.encodeInitdata(name, symbol, members)));
+        Distributor clone = Distributor(payable(distributor.clone(distributor.encodeInitdata(name, symbol, members))));
 
         assertEq(clone.name(), name);
         assertEq(clone.symbol(), symbol);
@@ -124,7 +118,7 @@ contract DistributorTest is Test {
         distributor.distribute(address(token), source);
     }
 
-    function testCanDistributeProportionally(uint200 multiplier) public {
+    function testCanDistributeERC20Proportionally(uint200 multiplier) public {
         uint256 distributionAmount = uint256(distributor.totalWeights()) * multiplier;
         token.mint(source, distributionAmount);
         assertEq(token.balanceOf(source), distributionAmount);
@@ -142,6 +136,32 @@ contract DistributorTest is Test {
         assertEq(token.balanceOf(source), 0);
         for (uint256 i; i < distributor.totalSupply(); i++) {
             assertEq(token.balanceOf(distributor.ownerOf(i)), uint256(distributor.membershipWeight(i)) * multiplier);
+        }
+    }
+
+    function testCanReceiveEther(uint224 amount) public {
+        vm.deal(member, amount);
+
+        vm.prank(member);
+        payable(address(distributor)).transfer(amount);
+    }
+
+    function testCanDistributeEtherProportionally(uint200 multiplier) public {
+        uint256 distributionAmount = uint256(distributor.totalWeights()) * multiplier;
+
+        vm.deal(address(distributor), distributionAmount);
+        assertEq(address(distributor).balance, distributionAmount);
+
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(distributor.ownerOf(i).balance, 0);
+        }
+
+        vm.prank(member);
+        distributor.distribute();
+
+        assertEq(source.balance, 0);
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(distributor.ownerOf(i).balance, uint256(distributor.membershipWeight(i)) * multiplier);
         }
     }
 

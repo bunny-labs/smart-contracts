@@ -10,8 +10,10 @@ contract Distributor is MembershipToken, Clonable {
     // Types //
     //*******//
 
-    error FailedTransfer();
+    error FailedTransfer(address to);
+    error FailedRefund(address to);
 
+    event Deposited(address from, uint256 amount);
     event Distributed();
 
     //***********//
@@ -96,9 +98,36 @@ contract Distributor is MembershipToken, Clonable {
             uint256 tokens = tokenShare(tokenId, distributionAmount);
 
             bool success = token.transferFrom(source, member, tokens);
-            if (!success) revert FailedTransfer();
+            if (!success) revert FailedTransfer(member);
         }
 
         emit Distributed();
+    }
+
+    /**
+     * Distribute the full base token balance of this contract to members.
+     * @dev Payable so the base token can be supplied when called.
+     */
+    function distribute() external payable memberOnly {
+        uint224 distributionAmount =
+            address(this).balance <= MAX_DISTRIBUTION_AMOUNT ? uint224(address(this).balance) : MAX_DISTRIBUTION_AMOUNT;
+
+        uint256 totalMemberships = totalSupply;
+        for (uint256 tokenId = 0; tokenId < totalMemberships; tokenId++) {
+            address member = ownerOf(tokenId);
+            uint256 tokens = tokenShare(tokenId, distributionAmount);
+
+            (bool success,) = member.call{value: tokens}("");
+            if (!success) revert FailedTransfer(member);
+        }
+
+        emit Distributed();
+    }
+
+    /**
+     * Fallback function to support direct payments to the contract address.
+     */
+    fallback() external payable {
+        emit Deposited(msg.sender, msg.value);
     }
 }

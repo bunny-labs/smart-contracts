@@ -1,4 +1,4 @@
-name: contracts
+name: test
 
 on:
   push:
@@ -7,10 +7,6 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
-
-defaults:
-  run:
-    working-directory: ./contracts
 
 jobs:
   test:

@@ -23,3 +23,6 @@
 	path = lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
 	branch = v4.8.1
+[submodule "lib/bunny-libs"]
+	path = lib/bunny-libs
+	url = https://github.com/bunny-labs/bunny-libs

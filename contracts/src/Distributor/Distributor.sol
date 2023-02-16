@@ -16,6 +16,11 @@ contract Distributor is MembershipToken, Clonable {
     event Deposited(address from, uint256 amount);
     event Distributed();
 
+    struct Outflow {
+        address destination;
+        uint256 amount;
+    }
+
     //***********//
     // Variables //
     //***********//
@@ -87,18 +92,13 @@ contract Distributor is MembershipToken, Clonable {
      */
     function distribute(address asset, address source) external memberOnly {
         IERC20 token = IERC20(asset);
+        Outflow[] memory outflows = _generateOutflows(token.balanceOf(source));
 
-        uint256 tokenBalance = token.balanceOf(source);
-        uint224 distributionAmount =
-            tokenBalance <= MAX_DISTRIBUTION_AMOUNT ? uint224(tokenBalance) : MAX_DISTRIBUTION_AMOUNT;
+        for (uint256 i = 0; i < outflows.length; i++) {
+            Outflow memory outflow = outflows[i];
 
-        uint256 totalMemberships = totalSupply;
-        for (uint256 tokenId = 0; tokenId < totalMemberships; tokenId++) {
-            address member = ownerOf(tokenId);
-            uint256 tokens = tokenShare(tokenId, distributionAmount);
-
-            bool success = token.transferFrom(source, member, tokens);
-            if (!success) revert FailedTransfer(member);
+            bool success = token.transferFrom(source, outflow.destination, outflow.amount);
+            if (!success) revert FailedTransfer(outflow.destination);
         }
 
         emit Distributed();
@@ -109,19 +109,67 @@ contract Distributor is MembershipToken, Clonable {
      * @dev Payable so the base token can be supplied when called.
      */
     function distribute() external payable memberOnly {
-        uint224 distributionAmount =
-            address(this).balance <= MAX_DISTRIBUTION_AMOUNT ? uint224(address(this).balance) : MAX_DISTRIBUTION_AMOUNT;
+        Outflow[] memory outflows = _generateOutflows(address(this).balance);
 
-        uint256 totalMemberships = totalSupply;
-        for (uint256 tokenId = 0; tokenId < totalMemberships; tokenId++) {
-            address member = ownerOf(tokenId);
-            uint256 tokens = tokenShare(tokenId, distributionAmount);
+        for (uint256 i = 0; i < outflows.length; i++) {
+            Outflow memory outflow = outflows[i];
 
-            (bool success,) = member.call{value: tokens}("");
-            if (!success) revert FailedTransfer(member);
+            (bool success,) = outflow.destination.call{value: outflow.amount}("");
+            if (!success) revert FailedTransfer(outflow.destination);
         }
 
         emit Distributed();
+    }
+
+    //*************//
+    // Simulations //
+    //*************//
+
+    /**
+     * Simulate the distribution of a token from a source address.
+     * @param asset The address of the ERC20 token that will be distributed.
+     * @param source The address that holds the tokens that should be distributed.
+     */
+    function simulate(address asset, address source) external view returns (Outflow[] memory) {
+        return _generateOutflows(IERC20(asset).balanceOf(source));
+    }
+
+    /**
+     * Simulate the distribution of this contract's balance.
+     */
+    function simulate() external view returns (Outflow[] memory) {
+        return _generateOutflows(address(this).balance);
+    }
+
+    /**
+     * Simulate the distribution of an arbitrary amount.
+     * @param amount The amount to be distributed.
+     */
+    function simulate(uint256 amount) external view returns (Outflow[] memory) {
+        return _generateOutflows(amount);
+    }
+
+    //***********//
+    // Internals //
+    //***********//
+
+    /**
+     * Generate outflows based on current membership distribution and an amount of tokens.
+     * @param totalTokens The total amount of tokens that should be distributed.
+     */
+    function _generateOutflows(uint256 totalTokens) internal view returns (Outflow[] memory) {
+        uint256 totalMemberships = totalSupply;
+        Outflow[] memory outflows = new Outflow[](totalMemberships);
+
+        uint224 distributionAmount =
+            totalTokens <= MAX_DISTRIBUTION_AMOUNT ? uint224(totalTokens) : MAX_DISTRIBUTION_AMOUNT;
+
+        for (uint256 tokenId = 0; tokenId < totalMemberships; tokenId++) {
+            outflows[tokenId].destination = ownerOf(tokenId);
+            outflows[tokenId].amount = tokenShare(tokenId, distributionAmount);
+        }
+
+        return outflows;
     }
 
     /**

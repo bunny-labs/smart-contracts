@@ -1,10 +1,4 @@
 [profile.default]
-src = 'contracts/src'
-out = 'contracts/out'
-test = 'contracts/test'
-libs = ['contracts/lib']
-script = 'contracts/script'
-cache_path = 'contracts/cache'
 gas_reports = ["*"]
 solc_version = '0.8.16'
 

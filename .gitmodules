@@ -12,3 +12,7 @@
 [submodule "contracts/lib/bunny-libs"]
 	path = contracts/lib/bunny-libs
 	url = https://github.com/bunny-labs/bunny-libs
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+	branch = v1.3.0

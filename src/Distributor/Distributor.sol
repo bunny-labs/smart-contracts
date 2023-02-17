@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {Clonable} from "bunny-libs/Clonable/Clonable.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {MembershipToken} from "bunny-libs/MembershipToken/MembershipToken.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract Distributor is MembershipToken, Clonable {
+    using SafeERC20 for IERC20;
+
     //********//
     // Types //
     //*******//
@@ -95,10 +98,7 @@ contract Distributor is MembershipToken, Clonable {
         Outflow[] memory outflows = _generateOutflows(token.balanceOf(source));
 
         for (uint256 i = 0; i < outflows.length; i++) {
-            Outflow memory outflow = outflows[i];
-
-            bool success = token.transferFrom(source, outflow.destination, outflow.amount);
-            if (!success) revert FailedTransfer(outflow.destination);
+            token.safeTransferFrom(source, outflows[i].destination, outflows[i].amount);
         }
 
         emit Distributed();
@@ -113,10 +113,7 @@ contract Distributor is MembershipToken, Clonable {
         Outflow[] memory outflows = _generateOutflows(token.balanceOf(address(this)));
 
         for (uint256 i = 0; i < outflows.length; i++) {
-            Outflow memory outflow = outflows[i];
-
-            bool success = token.transfer(outflow.destination, outflow.amount);
-            if (!success) revert FailedTransfer(outflow.destination);
+            token.safeTransfer(outflows[i].destination, outflows[i].amount);
         }
 
         emit Distributed();

@@ -85,9 +85,9 @@ contract Distributor is MembershipToken, Clonable {
     //****************//
 
     /**
-     * Distribute the full balance of a token at an address to members.
+     * Distribute the full balance of an ERC20 token at an address to members.
      * @dev Needs token approval. Capped to uint224 at a time to avoid overflow.
-     * @param asset The ERC20 token that should be distributed.
+     * @param asset The token that should be distributed.
      * @param source The address that we should distribute from.
      */
     function distribute(address asset, address source) external memberOnly {
@@ -98,6 +98,24 @@ contract Distributor is MembershipToken, Clonable {
             Outflow memory outflow = outflows[i];
 
             bool success = token.transferFrom(source, outflow.destination, outflow.amount);
+            if (!success) revert FailedTransfer(outflow.destination);
+        }
+
+        emit Distributed();
+    }
+
+    /**
+     * Distribute the full balance of an ERC20 token held by this contract to members.
+     * @param asset The token that should be distributed.
+     */
+    function distribute(address asset) external memberOnly {
+        IERC20 token = IERC20(asset);
+        Outflow[] memory outflows = _generateOutflows(token.balanceOf(address(this)));
+
+        for (uint256 i = 0; i < outflows.length; i++) {
+            Outflow memory outflow = outflows[i];
+
+            bool success = token.transfer(outflow.destination, outflow.amount);
             if (!success) revert FailedTransfer(outflow.destination);
         }
 
@@ -126,12 +144,20 @@ contract Distributor is MembershipToken, Clonable {
     //*************//
 
     /**
-     * Simulate the distribution of a token from a source address.
-     * @param asset The address of the ERC20 token that will be distributed.
+     * Simulate the distribution of an ERC20 token from a source address.
+     * @param asset The address of the token that will be distributed.
      * @param source The address that holds the tokens that should be distributed.
      */
     function simulate(address asset, address source) external view returns (Outflow[] memory) {
         return _generateOutflows(IERC20(asset).balanceOf(source));
+    }
+
+    /**
+     * Simulate the distribution of an ERC20 token from this contract.
+     * @param asset The address of the token that will be distributed.
+     */
+    function simulate(address asset) external view returns (Outflow[] memory) {
+        return _generateOutflows(IERC20(asset).balanceOf(address(this)));
     }
 
     /**

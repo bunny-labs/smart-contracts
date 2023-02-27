@@ -7,7 +7,7 @@ import "openzeppelin-contracts/utils/Strings.sol";
 import "openzeppelin-contracts/proxy/Clones.sol";
 import "bunny-libs/MembershipToken/MembershipToken.sol";
 
-import "../src/Distributor/Distributor.sol";
+import "src/Distributor/Distributor.sol";
 
 contract TestToken is ERC20 {
     constructor() ERC20("TestToken", "TEST", 18) {}

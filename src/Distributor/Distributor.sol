@@ -88,6 +88,18 @@ contract Distributor is MembershipToken, Clonable {
     //****************//
 
     /**
+     * Distribute a specific amount of an ERC20 token at an address to members.
+     * @dev Needs token approval. Capped to uint224 at a time to avoid overflow.
+     * @param asset The token that should be distributed.
+     * @param source The address that we should distribute from.
+     * @param amount The amount that should be distributed.
+     */
+    function distribute(address asset, address source, uint256 amount) external memberOnly {
+        IERC20 token = IERC20(asset);
+        _distribute(token, source, amount);
+    }
+
+    /**
      * Distribute the full balance of an ERC20 token at an address to members.
      * @dev Needs token approval. Capped to uint224 at a time to avoid overflow.
      * @param asset The token that should be distributed.
@@ -95,28 +107,7 @@ contract Distributor is MembershipToken, Clonable {
      */
     function distribute(address asset, address source) external memberOnly {
         IERC20 token = IERC20(asset);
-        Outflow[] memory outflows = _generateOutflows(token.balanceOf(source));
-
-        for (uint256 i = 0; i < outflows.length; i++) {
-            token.safeTransferFrom(source, outflows[i].destination, outflows[i].amount);
-        }
-
-        emit Distributed();
-    }
-
-    /**
-     * Distribute the full balance of an ERC20 token held by this contract to members.
-     * @param asset The token that should be distributed.
-     */
-    function distribute(address asset) external memberOnly {
-        IERC20 token = IERC20(asset);
-        Outflow[] memory outflows = _generateOutflows(token.balanceOf(address(this)));
-
-        for (uint256 i = 0; i < outflows.length; i++) {
-            token.safeTransfer(outflows[i].destination, outflows[i].amount);
-        }
-
-        emit Distributed();
+        _distribute(token, source, token.balanceOf(source));
     }
 
     /**
@@ -139,30 +130,6 @@ contract Distributor is MembershipToken, Clonable {
     //*************//
     // Simulations //
     //*************//
-
-    /**
-     * Simulate the distribution of an ERC20 token from a source address.
-     * @param asset The address of the token that will be distributed.
-     * @param source The address that holds the tokens that should be distributed.
-     */
-    function simulate(address asset, address source) external view returns (Outflow[] memory) {
-        return _generateOutflows(IERC20(asset).balanceOf(source));
-    }
-
-    /**
-     * Simulate the distribution of an ERC20 token from this contract.
-     * @param asset The address of the token that will be distributed.
-     */
-    function simulate(address asset) external view returns (Outflow[] memory) {
-        return _generateOutflows(IERC20(asset).balanceOf(address(this)));
-    }
-
-    /**
-     * Simulate the distribution of this contract's balance.
-     */
-    function simulate() external view returns (Outflow[] memory) {
-        return _generateOutflows(address(this).balance);
-    }
 
     /**
      * Simulate the distribution of an arbitrary amount.
@@ -193,6 +160,28 @@ contract Distributor is MembershipToken, Clonable {
         }
 
         return outflows;
+    }
+
+    /**
+     * Distribute the specified amount of ERC20 tokens from the source address.
+     * @param token The token that should be distributed.
+     * @param source The address that we should distribute from.
+     * @param amount The amount that should be distributed.
+     */
+    function _distribute(IERC20 token, address source, uint256 amount) internal {
+        Outflow[] memory outflows = _generateOutflows(amount);
+
+        if (source == address(this)) {
+            for (uint256 i = 0; i < outflows.length; i++) {
+                token.safeTransfer(outflows[i].destination, outflows[i].amount);
+            }
+        } else {
+            for (uint256 i = 0; i < outflows.length; i++) {
+                token.safeTransferFrom(source, outflows[i].destination, outflows[i].amount);
+            }
+        }
+
+        emit Distributed();
     }
 
     /**

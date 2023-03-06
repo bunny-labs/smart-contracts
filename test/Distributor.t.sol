@@ -105,21 +105,27 @@ contract DistributorTest is Test {
         }
     }
 
+    function testCannotDistributeUnlessAMember() public {
+        vm.expectRevert(MembershipToken.NotAMember.selector);
+        distributor.distribute(address(token), source);
+
+        vm.expectRevert(MembershipToken.NotAMember.selector);
+        distributor.distribute(address(token), source, 1);
+
+        vm.expectRevert(MembershipToken.NotAMember.selector);
+        distributor.distribute();
+    }
+
     function testCannotDistributeWithoutApproval() public {
-        token.mint(source, 420);
+        token.mint(source, distributor.totalWeights());
 
         vm.expectRevert();
         vm.prank(member);
         distributor.distribute(address(token), source);
     }
 
-    function testCannotDistributeUnlessAMember() public {
-        vm.expectRevert(MembershipToken.NotAMember.selector);
-        distributor.distribute(address(token), source);
-    }
-
-    function testCanDistributeERC20Proportionally(uint200 multiplier) public {
-        uint256 distributionAmount = uint256(distributor.totalWeights()) * multiplier;
+    function testCanDistributeFullERC20BalanceFromSourceAddress(uint8 distributionMultiplier) public {
+        uint256 distributionAmount = uint256(distributor.totalWeights()) * distributionMultiplier;
         token.mint(source, distributionAmount);
         assertEq(token.balanceOf(source), distributionAmount);
 
@@ -135,7 +141,84 @@ contract DistributorTest is Test {
 
         assertEq(token.balanceOf(source), 0);
         for (uint256 i; i < distributor.totalSupply(); i++) {
-            assertEq(token.balanceOf(distributor.ownerOf(i)), uint256(distributor.membershipWeight(i)) * multiplier);
+            assertEq(
+                token.balanceOf(distributor.ownerOf(i)),
+                uint256(distributor.membershipWeight(i)) * distributionMultiplier
+            );
+        }
+    }
+
+    function testCanDistributeFullERC20BalanceFromOwnAddress(uint8 distributionMultiplier) public {
+        uint256 distributionAmount = uint256(distributor.totalWeights()) * distributionMultiplier;
+        token.mint(address(distributor), distributionAmount);
+        assertEq(token.balanceOf(address(distributor)), distributionAmount);
+
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(token.balanceOf(distributor.ownerOf(i)), 0);
+        }
+
+        vm.prank(member);
+        distributor.distribute(address(token), address(distributor));
+
+        assertEq(token.balanceOf(address(distributor)), 0);
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(
+                token.balanceOf(distributor.ownerOf(i)),
+                uint256(distributor.membershipWeight(i)) * distributionMultiplier
+            );
+        }
+    }
+
+    function testCanDistributePartialERC20BalanceFromSourceAddress(uint8 distributionMultiplier, uint8 extraMultiplier)
+        public
+    {
+        uint256 distributionAmount = uint256(distributor.totalWeights()) * distributionMultiplier;
+        uint256 extraAmount = uint256(distributor.totalWeights()) * extraMultiplier;
+
+        token.mint(source, distributionAmount + extraAmount);
+        assertEq(token.balanceOf(source), distributionAmount + extraAmount);
+
+        vm.prank(source);
+        token.approve(address(distributor), type(uint256).max);
+
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(token.balanceOf(distributor.ownerOf(i)), 0);
+        }
+
+        vm.prank(member);
+        distributor.distribute(address(token), source, distributionAmount);
+
+        assertEq(token.balanceOf(source), extraAmount);
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(
+                token.balanceOf(distributor.ownerOf(i)),
+                uint256(distributor.membershipWeight(i)) * distributionMultiplier
+            );
+        }
+    }
+
+    function testCanDistributePartialERC20BalanceFromOwnAddress(uint8 distributionMultiplier, uint8 extraMultiplier)
+        public
+    {
+        uint256 distributionAmount = uint256(distributor.totalWeights()) * distributionMultiplier;
+        uint256 extraAmount = uint256(distributor.totalWeights()) * extraMultiplier;
+
+        token.mint(address(distributor), distributionAmount + extraAmount);
+        assertEq(token.balanceOf(address(distributor)), distributionAmount + extraAmount);
+
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(token.balanceOf(distributor.ownerOf(i)), 0);
+        }
+
+        vm.prank(member);
+        distributor.distribute(address(token), address(distributor), distributionAmount);
+
+        assertEq(token.balanceOf(address(distributor)), extraAmount);
+        for (uint256 i; i < distributor.totalSupply(); i++) {
+            assertEq(
+                token.balanceOf(distributor.ownerOf(i)),
+                uint256(distributor.membershipWeight(i)) * distributionMultiplier
+            );
         }
     }
 
@@ -146,9 +229,8 @@ contract DistributorTest is Test {
         payable(address(distributor)).transfer(amount);
     }
 
-    function testCanDistributeEtherProportionally(uint200 multiplier) public {
-        uint256 distributionAmount = uint256(distributor.totalWeights()) * multiplier;
-
+    function testCanDistributeFullEtherBalanceFromOwnAddress(uint8 distributionMultiplier) public {
+        uint256 distributionAmount = uint256(distributor.totalWeights()) * distributionMultiplier;
         vm.deal(address(distributor), distributionAmount);
         assertEq(address(distributor).balance, distributionAmount);
 
@@ -159,42 +241,39 @@ contract DistributorTest is Test {
         vm.prank(member);
         distributor.distribute();
 
-        assertEq(source.balance, 0);
+        assertEq(address(distributor).balance, 0);
         for (uint256 i; i < distributor.totalSupply(); i++) {
-            assertEq(distributor.ownerOf(i).balance, uint256(distributor.membershipWeight(i)) * multiplier);
+            assertEq(distributor.ownerOf(i).balance, uint256(distributor.membershipWeight(i)) * distributionMultiplier);
         }
     }
 
-    function testCanDistributeAfterTransferring() public {
-        uint256 distributionAmount = uint256(distributor.totalWeights());
-        token.mint(source, distributionAmount);
-        assertEq(token.balanceOf(source), distributionAmount);
+    function testDistributionDestinationFollowsToken(uint8 transferCount) public {
+        MembershipToken.Membership[] memory members = new MembershipToken.Membership[](1);
+        members[0] = MembershipToken.Membership(member, type(uint32).max);
+        distributor = new Distributor("Vcooors", "VCOOOR", members, defaultCloningConfig);
 
-        vm.prank(source);
-        token.approve(address(distributor), type(uint256).max);
-
-        for (uint256 i = 1; i < distributor.totalSupply(); i++) {
-            address oldMember = makeAddr(vm.toString(i));
-            address newMember = makeAddr(vm.toString(i * 100));
+        address oldMember = member;
+        for (uint256 i = 1; i < transferCount; i++) {
+            address newMember = makeAddr(vm.toString(i));
 
             assertEq(distributor.balanceOf(oldMember), 1);
             assertEq(distributor.balanceOf(newMember), 0);
-            assertEq(distributor.ownerOf(i), oldMember);
-
             vm.prank(oldMember);
-            distributor.transferFrom(oldMember, newMember, i);
-
+            distributor.transferFrom(oldMember, newMember, 0);
             assertEq(distributor.balanceOf(oldMember), 0);
             assertEq(distributor.balanceOf(newMember), 1);
-            assertEq(distributor.ownerOf(i), newMember);
-        }
 
-        vm.prank(member);
-        distributor.distribute(address(token), source);
+            assertEq(address(distributor).balance, 0);
+            vm.deal(address(distributor), 420);
+            assertEq(address(distributor).balance, 420);
 
-        assertEq(token.balanceOf(source), 0);
-        for (uint256 i; i < distributor.totalSupply(); i++) {
-            assertEq(token.balanceOf(distributor.ownerOf(i)), uint256(distributor.membershipWeight(i)));
+            assertEq(newMember.balance, 0);
+            vm.prank(newMember);
+            distributor.distribute();
+            assertEq(newMember.balance, 420);
+            assertEq(address(distributor).balance, 0);
+
+            oldMember = newMember;
         }
     }
 

@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import {Clonable} from "bunny-libs/Clonable/Clonable.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
-import {MembershipToken} from "bunny-libs/MembershipToken/MembershipToken.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+
+import {Clonable} from "bunny-libs/Clonable/Clonable.sol";
+import {MembershipToken} from "bunny-libs/MembershipToken/MembershipToken.sol";
 
 contract Distributor is MembershipToken, Clonable {
     using SafeERC20 for IERC20;
+    using Address for address payable;
 
     //********//
     // Types //
     //*******//
 
-    error FailedTransfer(address to);
-    error FailedRefund(address to);
-
-    event Deposited(address from, uint256 amount);
     event Distributed();
+    event Deposited(address from, uint256 amount);
 
     struct Outflow {
         address destination;
@@ -73,7 +73,7 @@ contract Distributor is MembershipToken, Clonable {
 
     /**
      * Helper for decoding initialization parameters from bytes.
-     * @param initdata nitialization data, encoded to bytes.
+     * @param initdata Initialization data, encoded to bytes.
      */
     function decodeInitdata(bytes memory initdata)
         public
@@ -95,8 +95,7 @@ contract Distributor is MembershipToken, Clonable {
      * @param amount The amount that should be distributed.
      */
     function distribute(address asset, address source, uint256 amount) external memberOnly {
-        IERC20 token = IERC20(asset);
-        _distribute(token, source, amount);
+        _distribute(IERC20(asset), source, amount);
     }
 
     /**
@@ -111,17 +110,15 @@ contract Distributor is MembershipToken, Clonable {
     }
 
     /**
-     * Distribute the full base token balance of this contract to members.
-     * @dev Payable so the base token can be supplied when called.
+     * Distribute the full native token balance of this contract to members.
+     * @dev Payable so native token can be supplied when called.
      */
     function distribute() external payable memberOnly {
         Outflow[] memory outflows = _generateOutflows(address(this).balance);
 
         for (uint256 i = 0; i < outflows.length; i++) {
             Outflow memory outflow = outflows[i];
-
-            (bool success,) = outflow.destination.call{value: outflow.amount}("");
-            if (!success) revert FailedTransfer(outflow.destination);
+            payable(outflow.destination).sendValue(outflow.amount);
         }
 
         emit Distributed();

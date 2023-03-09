@@ -300,4 +300,8 @@ contract DistributorTest is Test {
         distributor.distribute(address(token), source);
         assertEq(token.balanceOf(source), 0);
     }
+
+    function testCanSimulateDistribution() public view {
+        distributor.simulate(distributor.totalWeights());
+    }
 }
